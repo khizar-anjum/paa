@@ -4,7 +4,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta, date
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, cast, Date
+from collections import defaultdict
 import os
 from dotenv import load_dotenv
 
@@ -463,6 +464,177 @@ def create_daily_checkin(
     db.commit()
     db.refresh(db_checkin)
     return db_checkin
+
+
+# Analytics endpoints
+@app.get("/analytics/habits")
+def get_habits_analytics(
+    days: int = 30,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Get habits with completion data
+    habits = db.query(models.Habit).filter(
+        models.Habit.user_id == current_user.id,
+        models.Habit.is_active == 1
+    ).all()
+    
+    # Calculate date range
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days)
+    
+    analytics_data = []
+    
+    for habit in habits:
+        # Get completion logs for this period
+        logs = db.query(models.HabitLog).filter(
+            models.HabitLog.habit_id == habit.id,
+            cast(models.HabitLog.completed_at, Date) >= start_date,
+            cast(models.HabitLog.completed_at, Date) <= end_date
+        ).all()
+        
+        # Group by date
+        completions_by_date = defaultdict(int)
+        for log in logs:
+            log_date = log.completed_at.date()
+            completions_by_date[log_date] = 1
+        
+        # Create daily data
+        daily_data = []
+        current_date = start_date
+        while current_date <= end_date:
+            daily_data.append({
+                "date": current_date.isoformat(),
+                "completed": completions_by_date.get(current_date, 0)
+            })
+            current_date += timedelta(days=1)
+        
+        # Calculate stats
+        total_days = days
+        completed_days = len([d for d in daily_data if d["completed"] > 0])
+        completion_rate = (completed_days / total_days) * 100 if total_days > 0 else 0
+        
+        analytics_data.append({
+            "habit_id": habit.id,
+            "habit_name": habit.name,
+            "completion_rate": round(completion_rate, 1),
+            "total_completions": completed_days,
+            "total_days": total_days,
+            "daily_data": daily_data
+        })
+    
+    return analytics_data
+
+@app.get("/analytics/mood")
+def get_mood_analytics(
+    days: int = 30,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Get mood data for the period
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days)
+    
+    checkins = db.query(models.DailyCheckIn).filter(
+        models.DailyCheckIn.user_id == current_user.id,
+        cast(models.DailyCheckIn.timestamp, Date) >= start_date,
+        cast(models.DailyCheckIn.timestamp, Date) <= end_date
+    ).order_by(models.DailyCheckIn.timestamp.asc()).all()
+    
+    # Group by date (latest checkin per day)
+    mood_by_date = {}
+    for checkin in checkins:
+        checkin_date = checkin.timestamp.date()
+        if checkin_date not in mood_by_date or checkin.timestamp > mood_by_date[checkin_date]['timestamp']:
+            mood_by_date[checkin_date] = {
+                'mood': checkin.mood,
+                'notes': checkin.notes,
+                'timestamp': checkin.timestamp
+            }
+    
+    # Create daily data
+    daily_moods = []
+    current_date = start_date
+    while current_date <= end_date:
+        mood_data = mood_by_date.get(current_date)
+        daily_moods.append({
+            "date": current_date.isoformat(),
+            "mood": mood_data['mood'] if mood_data else None,
+            "notes": mood_data['notes'] if mood_data else None
+        })
+        current_date += timedelta(days=1)
+    
+    # Calculate average mood
+    mood_values = [m['mood'] for m in daily_moods if m['mood'] is not None]
+    average_mood = sum(mood_values) / len(mood_values) if mood_values else None
+    
+    return {
+        "average_mood": round(average_mood, 1) if average_mood else None,
+        "total_checkins": len(mood_values),
+        "daily_moods": daily_moods
+    }
+
+@app.get("/analytics/overview")
+def get_overview_analytics(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Habits overview
+    total_habits = db.query(func.count(models.Habit.id)).filter(
+        models.Habit.user_id == current_user.id,
+        models.Habit.is_active == 1
+    ).scalar()
+    
+    # Completed today
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    completed_today = db.query(
+        func.count(func.distinct(models.HabitLog.habit_id))
+    ).join(models.Habit).filter(
+        models.Habit.user_id == current_user.id,
+        models.HabitLog.completed_at >= today_start
+    ).scalar()
+    
+    # Current mood (today's latest checkin)
+    today = date.today()
+    # Use date() function instead of cast for SQLite compatibility
+    today_checkin = db.query(models.DailyCheckIn).filter(
+        models.DailyCheckIn.user_id == current_user.id,
+        func.date(models.DailyCheckIn.timestamp) == today.isoformat()
+    ).order_by(models.DailyCheckIn.timestamp.desc()).first()
+    
+    # Longest streak (for all habits combined)
+    # This is simplified - could be enhanced
+    all_logs = db.query(models.HabitLog).join(models.Habit).filter(
+        models.Habit.user_id == current_user.id
+    ).order_by(models.HabitLog.completed_at.desc()).limit(365).all()
+    
+    # Calculate longest streak of any activity
+    streak_days = set()
+    for log in all_logs:
+        streak_days.add(log.completed_at.date())
+    
+    longest_streak = 0
+    current_streak = 0
+    check_date = date.today()
+    
+    for i in range(365):  # Check last year
+        if check_date in streak_days:
+            current_streak += 1
+            longest_streak = max(longest_streak, current_streak)
+        else:
+            current_streak = 0
+        check_date -= timedelta(days=1)
+    
+    return {
+        "total_habits": total_habits,
+        "completed_today": completed_today,
+        "completion_rate": round((completed_today / total_habits) * 100, 1) if total_habits > 0 else 0,
+        "current_mood": today_checkin.mood if today_checkin else None,
+        "longest_streak": longest_streak,
+        "total_conversations": db.query(func.count(models.Conversation.id)).filter(
+            models.Conversation.user_id == current_user.id
+        ).scalar()
+    }
 
 if __name__ == "__main__":
     import uvicorn

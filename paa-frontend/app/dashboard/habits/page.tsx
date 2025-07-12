@@ -74,18 +74,18 @@ export default function HabitsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Your Habits</h1>
-          <p className="text-gray-600 mt-2">Here's what I know about your habits so far based on our chats. Feel free to edit any habit if you'd like something changed.</p>
+      <div className="mb-6">
+        <div className="flex justify-between items-start mb-4">
+          <h1 className="text-2xl font-bold text-gray-900">Your Habits</h1>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            New Habit
+          </button>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-5 w-5 mr-2" />
-          New Habit
-        </button>
+        <p className="text-gray-600 text-sm">Here's what I know about your habits so far based on our chats. Feel free to edit any habit if you'd like something changed.</p>
       </div>
 
       {habits.length === 0 ? (
@@ -101,7 +101,7 @@ export default function HabitsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-4">
           {habits.map((habit) => (
             <HabitCard
               key={habit.id}
