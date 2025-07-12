@@ -1,0 +1,45 @@
+# Initialize Project Context
+
+This command initializes your understanding of the UW-AI-Waveform project by reading all relevant documentation.
+
+## Instructions for Agent
+
+When this command is invoked, you should:
+
+1. **ONLY read files in context/summaries/** to gain:
+   - Complete project understanding
+   - Technical challenges being addressed
+   - Team responsibilities
+   - Getting started information
+   - Project architecture and pipeline details
+   - Module-specific documentation
+
+2. **DO NOT read any other files** including:
+   - README.md
+   - CLAUDE.md
+   - Any source code files
+   - Configuration files
+   - Any files outside context/summaries/
+
+3. **After reading ONLY the summary files**, briefly confirm that you've:
+   - Understood the project goals (neural video transmission for underwater acoustic channels)
+   - Familiarized yourself with the two-part pipeline (training and evaluation)
+   - Noted the key components and directory structure
+   - Identified team member responsibilities (Khizar and Jason)
+   - Reviewed all module summaries for comprehensive understanding
+
+## IMPORTANT RESTRICTION
+
+**You must ONLY read files from context/summaries/ during initialization.** All necessary project information has been carefully curated and placed in these summary files. Reading other files is unnecessary and may lead to information overload or confusion.
+
+## Usage
+
+Simply invoke this by asking the agent to "init" or "initialize project context".
+
+## Purpose
+
+This ensures any new agent working on the project has a complete understanding of:
+- What we're building
+- Why we're building it
+- How the system is architected
+- Who is responsible for what components
