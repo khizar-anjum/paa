@@ -189,3 +189,11 @@ class ScheduledPrompt(ScheduledPromptBase):
     
     class Config:
         from_attributes = True
+
+# Debug schemas
+class TimeMultiplierRequest(BaseModel):
+    multiplier: int
+
+class FakeTimeStartRequest(BaseModel):
+    time_multiplier: int = 600
+    fake_start_time: Optional[str] = None

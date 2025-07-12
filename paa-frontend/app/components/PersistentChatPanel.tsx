@@ -18,6 +18,13 @@ export function PersistentChatPanel() {
   useEffect(() => {
     loadChatHistory();
     loadProactiveData();
+    
+    // Set up interval to refresh proactive messages every 10 seconds
+    const proactiveInterval = setInterval(loadProactiveData, 10000);
+    
+    return () => {
+      clearInterval(proactiveInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -42,6 +49,10 @@ export function PersistentChatPanel() {
         proactiveApi.getProactiveMessages(),
         proactiveApi.getCommitments()
       ]);
+      console.log('Loaded proactive data:', { 
+        proactiveMessages: proactiveData.length, 
+        commitments: commitmentsData.length 
+      });
       setProactiveMessages(proactiveData);
       setCommitments(commitmentsData);
     } catch (error) {

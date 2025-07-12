@@ -6,6 +6,17 @@ from datetime import datetime, timedelta, date, time as time_obj
 from database import SessionLocal, Commitment, ProactiveMessage, ScheduledPrompt, User
 import logging
 
+# Import time service for fake time support
+def get_time_service():
+    """Lazy import to avoid circular imports"""
+    from services.time_service import time_service
+    return time_service
+
+def get_fake_time_scheduler():
+    """Lazy import to avoid circular imports"""
+    from services.fake_time_scheduler import fake_time_scheduler
+    return fake_time_scheduler
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +42,7 @@ async def send_proactive_message(user_id: int, content: str, message_type: str, 
             message_type=message_type,
             content=content,
             related_commitment_id=related_commitment_id,
-            sent_at=datetime.utcnow()
+            sent_at=get_time_service().now()
         )
         db.add(proactive_msg)
         db.commit()
@@ -53,20 +64,22 @@ async def check_commitment_reminders():
     """Check for overdue commitments and send reminders"""
     db = get_db()
     try:
-        now = datetime.utcnow()
-        today = date.today()
+        now = get_time_service().now()
+        today = get_time_service().now().date()
         
         # Find overdue commitments that need reminders
         overdue_commitments = db.query(Commitment).filter(
             Commitment.status == "pending",
-            Commitment.deadline < today,
+            Commitment.deadline < now,  # Compare datetime to datetime
             Commitment.reminder_count < 2  # Max 2 reminders to avoid being annoying
         ).all()
         
         for commitment in overdue_commitments:
             # Check if we should send a reminder (not too frequent)
+            # For fake time testing, use shorter intervals
+            min_interval = 30 * 60  # 30 minutes instead of 24 hours for testing
             if commitment.last_reminded_at is None or \
-               (now - commitment.last_reminded_at).total_seconds() > 24 * 3600:  # 24 hours
+               (now - commitment.last_reminded_at).total_seconds() > min_interval:
                 
                 if commitment.reminder_count == 0:
                     # First follow-up: gentle check-in
@@ -84,7 +97,7 @@ async def check_commitment_reminders():
                 
                 # Update commitment
                 commitment.reminder_count += 1
-                commitment.last_reminded_at = now
+                commitment.last_reminded_at = get_time_service().now()
                 db.commit()
                 
     except Exception as e:
@@ -97,7 +110,7 @@ async def send_scheduled_prompts():
     """Send scheduled prompts like work check-ins"""
     db = get_db()
     try:
-        now = datetime.utcnow()
+        now = get_time_service().now()
         current_time = now.time()
         current_day = now.strftime("%A").lower()  # monday, tuesday, etc.
         
@@ -128,7 +141,7 @@ async def send_scheduled_prompts():
                         )
                         
                         # Update last sent time
-                        prompt.last_sent_at = now
+                        prompt.last_sent_at = get_time_service().now()
                         db.commit()
                         
     except Exception as e:
@@ -221,9 +234,10 @@ def initialize_default_prompts_for_user_sync(user_id: int):
     finally:
         db.close()
 
-def start_scheduler():
-    """Start the background scheduler"""
+async def start_scheduler():
+    """Start the background scheduler (both real and fake time schedulers)"""
     try:
+        # Start the regular APScheduler for real time
         # Schedule commitment reminder checks every hour
         scheduler.add_job(
             check_commitment_reminders,
@@ -243,26 +257,52 @@ def start_scheduler():
         # Only start if not already running
         if not scheduler.running:
             scheduler.start()
-            logger.info("Proactive AI scheduler started successfully")
+            logger.info("Real-time scheduler started successfully")
         else:
-            logger.info("Proactive AI scheduler already running")
+            logger.info("Real-time scheduler already running")
+        
+        # Also start the fake-time scheduler
+        fake_scheduler = get_fake_time_scheduler()
+        
+        # Add fake-time jobs (converted to fake time intervals)
+        fake_scheduler.add_job(
+            "fake_commitment_reminders",
+            check_commitment_reminders,
+            interval_minutes=60  # 60 fake minutes = 1 fake hour
+        )
+        
+        fake_scheduler.add_job(
+            "fake_scheduled_prompts", 
+            send_scheduled_prompts,
+            interval_minutes=5  # 5 fake minutes
+        )
+        
+        await fake_scheduler.start()
+        logger.info("Fake-time scheduler started successfully")
         
     except RuntimeError as e:
         if "no running event loop" in str(e):
-            logger.info("Scheduler will start when FastAPI server starts (no event loop yet)")
+            logger.info("Schedulers will start when FastAPI server starts (no event loop yet)")
         else:
-            logger.error(f"Runtime error starting scheduler: {e}")
+            logger.error(f"Runtime error starting schedulers: {e}")
     except Exception as e:
-        logger.error(f"Error starting scheduler: {e}")
+        logger.error(f"Error starting schedulers: {e}")
 
-def stop_scheduler():
-    """Stop the background scheduler"""
+async def stop_scheduler():
+    """Stop the background scheduler (both real and fake time schedulers)"""
     try:
+        # Stop real-time scheduler
         if scheduler.running:
             scheduler.shutdown()
-            logger.info("Proactive AI scheduler stopped")
+            logger.info("Real-time scheduler stopped")
+        
+        # Stop fake-time scheduler
+        fake_scheduler = get_fake_time_scheduler()
+        await fake_scheduler.stop()
+        logger.info("Fake-time scheduler stopped")
+        
     except Exception as e:
-        logger.error(f"Error stopping scheduler: {e}")
+        logger.error(f"Error stopping schedulers: {e}")
 
 # Expose the scheduler instance for external access
 __all__ = ["scheduler", "start_scheduler", "stop_scheduler", "initialize_default_prompts_for_user", "initialize_default_prompts_for_user_sync", "send_proactive_message"]

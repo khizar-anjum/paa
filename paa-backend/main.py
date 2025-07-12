@@ -18,6 +18,8 @@ import schemas
 import database as models
 from anthropic import Anthropic
 from scheduler import start_scheduler, stop_scheduler, initialize_default_prompts_for_user_sync
+from services.commitment_parser import commitment_parser
+from services.time_service import time_service
 import atexit
 
 load_dotenv()
@@ -41,12 +43,20 @@ anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 
 # We'll initialize the scheduler on FastAPI startup instead of at import time
 # Register cleanup function for graceful shutdown
-atexit.register(stop_scheduler)
+async def cleanup_schedulers():
+    """Cleanup function for graceful shutdown"""
+    await stop_scheduler()
+
+# Note: atexit doesn't work well with async functions, so we'll rely on FastAPI shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup schedulers when FastAPI shuts down"""
+    await cleanup_schedulers()
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize background scheduler when FastAPI starts"""
-    start_scheduler()
+    await start_scheduler()
 
 @app.get("/")
 def read_root():
@@ -118,7 +128,7 @@ def get_habits(
     # Add stats to each habit
     for habit in habits:
         # Check if completed today
-        today_start = datetime.combine(date.today(), datetime.min.time())
+        today_start = datetime.combine(time_service.now().date(), datetime.min.time())
         habit.completed_today = db.query(models.HabitLog).filter(
             models.HabitLog.habit_id == habit.id,
             models.HabitLog.completed_at >= today_start
@@ -131,7 +141,7 @@ def get_habits(
         
         current_streak = 0
         if logs:
-            check_date = date.today()
+            check_date = time_service.now().date()
             for log in logs:
                 log_date = log.completed_at.date()
                 if log_date == check_date or (current_streak == 0 and log_date == check_date - timedelta(days=1)):
@@ -176,7 +186,7 @@ def complete_habit(
         raise HTTPException(status_code=404, detail="Habit not found")
     
     # Check if already completed today
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_start = datetime.combine(time_service.now().date(), datetime.min.time())
     existing_log = db.query(models.HabitLog).filter(
         models.HabitLog.habit_id == habit_id,
         models.HabitLog.completed_at >= today_start
@@ -233,7 +243,7 @@ def get_habit_stats(
                 break
     
     # Check if completed today
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_start = datetime.combine(time_service.now().date(), datetime.min.time())
     completed_today = db.query(models.HabitLog).filter(
         models.HabitLog.habit_id == habit_id,
         models.HabitLog.completed_at >= today_start
@@ -319,7 +329,7 @@ async def chat(
         habit_context = []
         for habit in habits:
             # Check completion status
-            today_start = datetime.combine(date.today(), datetime.min.time())
+            today_start = datetime.combine(time_service.now().date(), datetime.min.time())
             completed_today = db.query(models.HabitLog).filter(
                 models.HabitLog.habit_id == habit.id,
                 models.HabitLog.completed_at >= today_start
@@ -345,8 +355,53 @@ async def chat(
             conversation_history.append(f"User: {convo.message}")
             conversation_history.append(f"Assistant: {convo.response}")
         
+        # Detect commitments in the user's message
+        detected_commitments = commitment_parser.extract_commitments(message.message)
+        commitment_acknowledgments = []
+        
+        # Create commitment records for detected commitments
+        for commitment_data in detected_commitments:
+            try:
+                # Create commitment in database
+                db_commitment = models.Commitment(
+                    user_id=current_user.id,
+                    task_description=commitment_data['task_description'],
+                    original_message=commitment_data['original_message'],
+                    deadline=commitment_data['deadline'],
+                    status='pending',
+                    reminder_count=0
+                )
+                db.add(db_commitment)
+                db.commit()
+                db.refresh(db_commitment)
+                
+                # Add acknowledgment for AI response
+                deadline_str = commitment_data['deadline'].strftime("%A, %B %d")
+                if commitment_data['time_phrase'].lower() == 'today':
+                    deadline_str = "today"
+                elif commitment_data['time_phrase'].lower() == 'tomorrow':
+                    deadline_str = "tomorrow"
+                
+                commitment_acknowledgments.append(
+                    f"I'll remind you about '{commitment_data['task_description']}' if needed. You mentioned you want to do it {deadline_str}."
+                )
+                
+            except Exception as e:
+                print(f"Error creating commitment: {e}")
+                # Continue processing even if one commitment fails
+                continue
+        
         # Create system prompt
         import json
+        commitment_context = ""
+        if commitment_acknowledgments:
+            commitment_context = f"""
+
+Detected commitments from this message that you should acknowledge:
+{chr(10).join(commitment_acknowledgments)}
+
+Important: Include these commitment acknowledgments naturally in your response to show you're tracking their commitments."""
+
         system_prompt = f"""You are a friendly, supportive personal AI assistant helping {current_user.username} with their habits and personal development.
 
 Current habits:
@@ -357,6 +412,7 @@ Recent mood check-ins:
 
 Recent conversation history:
 {chr(10).join(conversation_history[-10:])}
+{commitment_context}
 
 Guidelines:
 1. Be encouraging and supportive
@@ -365,7 +421,8 @@ Guidelines:
 4. Provide actionable advice
 5. Keep responses concise but warm
 6. If they haven't completed habits today, gently encourage them
-7. Celebrate their successes and streaks"""
+7. Celebrate their successes and streaks
+8. If commitments were detected, acknowledge them naturally in your response"""
 
         # Call AI API
         if anthropic_client and os.getenv("ANTHROPIC_API_KEY"):
@@ -382,7 +439,7 @@ Guidelines:
             response_text = response.content[0].text
         else:
             # Fallback response for demo without API key
-            response_text = generate_demo_response(message.message, habit_context, mood_context)
+            response_text = generate_demo_response(message.message, habit_context, mood_context, commitment_acknowledgments)
         
         # Save conversation
         conversation = models.Conversation(
@@ -392,6 +449,26 @@ Guidelines:
         )
         db.add(conversation)
         db.commit()
+        db.refresh(conversation)
+        
+        # Update commitments with conversation reference
+        if detected_commitments:
+            for commitment_data in detected_commitments:
+                try:
+                    # Find the commitment we just created and update with conversation ID
+                    db_commitment = db.query(models.Commitment).filter(
+                        models.Commitment.user_id == current_user.id,
+                        models.Commitment.task_description == commitment_data['task_description'],
+                        models.Commitment.original_message == commitment_data['original_message'],
+                        models.Commitment.created_from_conversation_id.is_(None)
+                    ).first()
+                    
+                    if db_commitment:
+                        db_commitment.created_from_conversation_id = conversation.id
+                        db.commit()
+                except Exception as e:
+                    print(f"Error updating commitment with conversation ID: {e}")
+                    continue
         
         return schemas.ChatResponse(
             message=message.message,
@@ -418,33 +495,43 @@ Guidelines:
             timestamp=conversation.timestamp
         )
 
-def generate_demo_response(message: str, habits: list, moods: list) -> str:
+def generate_demo_response(message: str, habits: list, moods: list, commitment_acknowledgments: list = None) -> str:
     """Generate a demo response when no AI API is available"""
     message_lower = message.lower()
+    
+    # Build base response
+    base_response = ""
     
     if any(word in message_lower for word in ['habit', 'track', 'progress']):
         if habits:
             completed = sum(1 for h in habits if h['completed_today'])
             total = len(habits)
-            return f"You're tracking {total} habits! You've completed {completed} out of {total} today. Keep up the great work! 🌟"
+            base_response = f"You're tracking {total} habits! You've completed {completed} out of {total} today. Keep up the great work! 🌟"
         else:
-            return "I notice you haven't set up any habits yet. Would you like to start with something simple like daily meditation or drinking more water?"
+            base_response = "I notice you haven't set up any habits yet. Would you like to start with something simple like daily meditation or drinking more water?"
     
     elif any(word in message_lower for word in ['feel', 'mood', 'today']):
         if moods and moods[0]['mood']:
             mood_score = moods[0]['mood']
             if mood_score >= 4:
-                return "I'm glad you're feeling good! What's been going well for you today?"
+                base_response = "I'm glad you're feeling good! What's been going well for you today?"
             else:
-                return "I hear you. Some days are tougher than others. What can I do to support you right now?"
+                base_response = "I hear you. Some days are tougher than others. What can I do to support you right now?"
         else:
-            return "How are you feeling today? I'm here to listen and support you."
+            base_response = "How are you feeling today? I'm here to listen and support you."
     
     elif any(word in message_lower for word in ['help', 'what can you']):
-        return "I can help you track habits, check in on your mood, provide motivation, and offer advice on building better routines. What would you like to focus on?"
+        base_response = "I can help you track habits, check in on your mood, provide motivation, and offer advice on building better routines. What would you like to focus on?"
     
     else:
-        return f"I understand you're asking about '{message}'. I'm here to support your personal growth journey. Feel free to ask me about your habits, mood, or anything else on your mind!"
+        base_response = f"I understand you're asking about '{message}'. I'm here to support your personal growth journey. Feel free to ask me about your habits, mood, or anything else on your mind!"
+    
+    # Add commitment acknowledgments if any were detected
+    if commitment_acknowledgments:
+        commitment_text = " " + " ".join(commitment_acknowledgments)
+        base_response += commitment_text
+    
+    return base_response
 
 # Get chat history endpoint
 @app.get("/chat/history")
@@ -766,7 +853,7 @@ def get_habits_analytics(
     ).all()
     
     # Calculate date range
-    end_date = date.today()
+    end_date = time_service.now().date()
     start_date = end_date - timedelta(days=days)
     
     analytics_data = []
@@ -818,7 +905,7 @@ def get_mood_analytics(
     db: Session = Depends(get_db)
 ):
     # Get mood data for the period
-    end_date = date.today()
+    end_date = time_service.now().date()
     start_date = end_date - timedelta(days=days)
     
     checkins = db.query(models.DailyCheckIn).filter(
@@ -872,7 +959,7 @@ def get_overview_analytics(
     ).scalar()
     
     # Completed today
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_start = datetime.combine(time_service.now().date(), datetime.min.time())
     completed_today = db.query(
         func.count(func.distinct(models.HabitLog.habit_id))
     ).join(models.Habit).filter(
@@ -881,7 +968,7 @@ def get_overview_analytics(
     ).scalar()
     
     # Current mood (today's latest checkin)
-    today = date.today()
+    today = time_service.now().date()
     # Use date() function instead of cast for SQLite compatibility
     today_checkin = db.query(models.DailyCheckIn).filter(
         models.DailyCheckIn.user_id == current_user.id,
@@ -921,6 +1008,99 @@ def get_overview_analytics(
             models.Conversation.user_id == current_user.id
         ).scalar()
     }
+
+# Debug API endpoints for time acceleration testing
+@app.post("/debug/time/start")
+def start_fake_time(
+    fake_start_time: str = None,  # ISO format datetime string
+    time_multiplier: int = 600,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Start fake time acceleration for testing proactive AI features"""
+    try:
+        start_datetime = None
+        if fake_start_time:
+            start_datetime = datetime.fromisoformat(fake_start_time.replace('Z', '+00:00'))
+        
+        result = time_service.start_fake_time(start_datetime, time_multiplier)
+        return {
+            "success": True,
+            "message": f"Fake time started with {time_multiplier}x acceleration",
+            **result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error starting fake time: {str(e)}")
+
+@app.post("/debug/time/stop")
+def stop_fake_time(current_user: models.User = Depends(get_current_user)):
+    """Stop fake time and return to real time"""
+    try:
+        result = time_service.stop_fake_time()
+        return {
+            "success": True,
+            "message": "Fake time stopped, returned to real time",
+            **result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error stopping fake time: {str(e)}")
+
+@app.post("/debug/time/set-multiplier")
+def set_time_multiplier(
+    request: schemas.TimeMultiplierRequest,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Change the time acceleration multiplier while fake time is running"""
+    try:
+        result = time_service.set_multiplier(request.multiplier)
+        
+        # Check if the time service returned an error
+        if result.get("status") == "error":
+            return {
+                "success": False,
+                "message": result.get("message", "Unknown error")
+            }
+        
+        return {
+            "success": True,
+            "message": f"Time multiplier set to {request.multiplier}x",
+            **result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error setting multiplier: {str(e)}")
+
+@app.post("/debug/time/jump")
+def jump_to_time(
+    target_time: str,  # ISO format datetime string
+    current_user: models.User = Depends(get_current_user)
+):
+    """Jump fake time to a specific datetime"""
+    try:
+        target_datetime = datetime.fromisoformat(target_time.replace('Z', '+00:00'))
+        result = time_service.jump_to_time(target_datetime)
+        return {
+            "success": True,
+            "message": f"Jumped to fake time: {target_time}",
+            **result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error jumping to time: {str(e)}")
+
+@app.get("/debug/time/status")
+def get_time_status(current_user: models.User = Depends(get_current_user)):
+    """Get current time service status"""
+    try:
+        from services.fake_time_scheduler import fake_time_scheduler
+        
+        time_status = time_service.get_status()
+        scheduler_status = fake_time_scheduler.get_status()
+        
+        return {
+            "success": True,
+            "time_service": time_status,
+            "fake_scheduler": scheduler_status
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error getting time status: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

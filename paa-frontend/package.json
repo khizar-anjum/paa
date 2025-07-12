@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@flowglad/nextjs": "^0.10.17",
     "@tanstack/react-query": "^5.0.0",
     "axios": "^1.6.0",
     "lucide-react": "^0.400.0",

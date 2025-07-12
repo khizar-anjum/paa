@@ -351,9 +351,9 @@ AI: "That sounds challenging. Want to talk about what made it difficult? Sometim
 - [x] Basic proactive message display in chat
 
 ### **Phase 2 Success Criteria**  
-- [ ] Commitment detection working for common patterns
-- [ ] Automatic reminder scheduling functional
-- [ ] User can acknowledge/dismiss commitments
+- [x] Commitment detection working for common patterns
+- [x] Automatic reminder scheduling functional
+- [x] User can acknowledge/dismiss commitments
 
 ### **Phase 3 Success Criteria**
 - [ ] 5 PM work check-ins working Monday-Friday

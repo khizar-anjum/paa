@@ -6,6 +6,7 @@ import { Brain, Home, Target, MessageSquare, BarChart3, Users, User, LogOut, Loa
 import Link from 'next/link';
 import { useEffect } from 'react';
 import { PersistentChatPanel } from '@/app/components/PersistentChatPanel';
+import TimeDebugPanel from '@/app/components/TimeDebugPanel';
 
 export default function DashboardLayout({
   children,
@@ -106,6 +107,9 @@ export default function DashboardLayout({
           <PersistentChatPanel />
         </div>
       </div>
+      
+      {/* Time Debug Panel - Fixed position */}
+      <TimeDebugPanel />
     </div>
   );
 }
