@@ -38,11 +38,6 @@ Detailed step-by-step plans exist in the `context/plans/` directory but should o
 - Prioritize demo-worthy features that showcase the AI assistant concept
 - Keep implementation simple but functional
 
-## Development Approach
-- Start with backend setup (Phase 1)
-- Build frontend shell with auth (Phase 2) 
-- Add core habit functionality (Phase 3)
-- Integrate AI chat with context (Phase 4)
-- Finish with analytics and check-ins (Phase 5)
-
 Remember: This is an MVP to demonstrate the proactive, persistent AI assistant concept in a hackathon setting. Focus on working functionality over polish.
+
+## WAIT FOR USER COMMAND. DO NOT DO ANYTHING ELSE! 
