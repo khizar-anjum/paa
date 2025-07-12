@@ -16,13 +16,6 @@ export default function DashboardPage() {
       color: 'bg-blue-500',
     },
     {
-      title: 'Chat with AI',
-      description: 'Get personalized advice and support',
-      icon: MessageSquare,
-      href: '/dashboard/chat',
-      color: 'bg-green-500',
-    },
-    {
       title: 'View Analytics',
       description: 'See your progress and insights',
       icon: BarChart3,
@@ -47,41 +40,41 @@ export default function DashboardPage() {
         Here&apos;s your personal dashboard. What would you like to do today?
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-4">
         {quickActions.map((action) => (
           <Link
             key={action.title}
             href={action.href}
-            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+            className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
           >
-            <div className="flex items-center mb-4">
-              <div className={`${action.color} p-3 rounded-lg`}>
-                <action.icon className="h-6 w-6 text-white" />
+            <div className="flex items-center mb-2">
+              <div className={`${action.color} p-2 rounded-lg`}>
+                <action.icon className="h-5 w-5 text-white" />
               </div>
-              <h3 className="ml-4 text-lg font-semibold text-gray-900">
+              <h3 className="ml-3 text-base font-semibold text-gray-900">
                 {action.title}
               </h3>
             </div>
-            <p className="text-gray-600">{action.description}</p>
+            <p className="text-sm text-gray-600">{action.description}</p>
           </Link>
         ))}
       </div>
 
       {/* Quick Stats */}
-      <div className="mt-8 bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Stats</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="mt-6 bg-white rounded-lg shadow-md p-4">
+        <h2 className="text-lg font-semibold text-gray-900 mb-3">Quick Stats</h2>
+        <div className="grid grid-cols-3 gap-2">
           <div className="text-center">
-            <p className="text-3xl font-bold text-blue-600">0</p>
-            <p className="text-gray-600">Active Habits</p>
+            <p className="text-2xl font-bold text-blue-600">0</p>
+            <p className="text-xs text-gray-600">Active Habits</p>
           </div>
           <div className="text-center">
-            <p className="text-3xl font-bold text-green-600">0</p>
-            <p className="text-gray-600">Day Streak</p>
+            <p className="text-2xl font-bold text-green-600">0</p>
+            <p className="text-xs text-gray-600">Day Streak</p>
           </div>
           <div className="text-center">
-            <p className="text-3xl font-bold text-purple-600">😊</p>
-            <p className="text-gray-600">Current Mood</p>
+            <p className="text-2xl font-bold text-purple-600">😊</p>
+            <p className="text-xs text-gray-600">Current Mood</p>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Brain, Home, Target, MessageSquare, BarChart3, LogOut, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { PersistentChatPanel } from '@/app/components/PersistentChatPanel';
 
 export default function DashboardLayout({
   children,
@@ -35,13 +36,12 @@ export default function DashboardLayout({
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Habits', href: '/dashboard/habits', icon: Target },
-    { name: 'Chat', href: '/dashboard/chat', icon: MessageSquare },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-gray-50 overflow-hidden">
+      {/* Sidebar - visible on desktop, hidden on mobile */}
       <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg">
         <div className="flex items-center justify-center h-16 px-4 bg-blue-600">
           <Brain className="h-8 w-8 text-white mr-2" />
@@ -76,11 +76,33 @@ export default function DashboardLayout({
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="ml-64">
-        <main className="p-8">
-          {children}
-        </main>
+      {/* Mobile header - only visible on small screens */}
+      <div className="hidden bg-blue-600 h-16 flex items-center justify-between px-4">
+        <div className="flex items-center">
+          <Brain className="h-6 w-6 text-white mr-2" />
+          <span className="text-white font-bold">PAA</span>
+        </div>
+        <button
+          onClick={logout}
+          className="text-white hover:text-gray-200"
+        >
+          <LogOut className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Split content area */}
+      <div className="ml-64 flex h-screen max-w-none overflow-hidden">
+        {/* Main content - 45% of remaining space */}
+        <div className="w-[45%] bg-gray-50 min-w-0">
+          <main className="p-4 lg:p-6 h-full overflow-y-auto">
+            {children}
+          </main>
+        </div>
+        
+        {/* Chat panel - 55% of remaining space */}
+        <div className="w-[55%] bg-white border-l border-gray-200 min-w-0">
+          <PersistentChatPanel />
+        </div>
       </div>
     </div>
   );

@@ -272,32 +272,98 @@ def delete_habit(
     
     return {"message": "Habit deleted successfully"}
 
-# Chat endpoint (placeholder for now)
+# Enhanced Chat endpoint with AI integration
 @app.post("/chat", response_model=schemas.ChatResponse)
 async def chat(
     message: schemas.ChatMessage,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # For hackathon, simple implementation
     try:
-        # Get user context (habits, recent check-ins)
+        # Get user context
         habits = db.query(models.Habit).filter(
-            models.Habit.user_id == current_user.id
+            models.Habit.user_id == current_user.id,
+            models.Habit.is_active == 1
         ).all()
         
-        habit_context = "\n".join([f"- {h.name} ({h.frequency})" for h in habits])
+        # Get recent check-ins
+        recent_checkins = db.query(models.DailyCheckIn).filter(
+            models.DailyCheckIn.user_id == current_user.id
+        ).order_by(models.DailyCheckIn.timestamp.desc()).limit(5).all()
         
-        prompt = f"""You are a friendly personal AI assistant helping {current_user.username}.
-        Their current habits are:
-        {habit_context}
+        # Get recent conversations for context
+        recent_convos = db.query(models.Conversation).filter(
+            models.Conversation.user_id == current_user.id
+        ).order_by(models.Conversation.timestamp.desc()).limit(5).all()
         
-        User message: {message.message}
+        # Build context
+        habit_context = []
+        for habit in habits:
+            # Check completion status
+            today_start = datetime.combine(date.today(), datetime.min.time())
+            completed_today = db.query(models.HabitLog).filter(
+                models.HabitLog.habit_id == habit.id,
+                models.HabitLog.completed_at >= today_start
+            ).first() is not None
+            
+            habit_context.append({
+                "name": habit.name,
+                "frequency": habit.frequency,
+                "completed_today": completed_today,
+                "reminder_time": habit.reminder_time
+            })
         
-        Respond in a helpful, encouraging way."""
+        mood_context = []
+        for checkin in recent_checkins:
+            mood_context.append({
+                "date": checkin.timestamp.strftime("%Y-%m-%d"),
+                "mood": checkin.mood,
+                "notes": checkin.notes
+            })
         
-        # For demo, you can use a simple response or integrate with AI
-        response_text = f"I understand you're asking about: {message.message}. Let me help you with that!"
+        conversation_history = []
+        for convo in reversed(recent_convos):  # Oldest first
+            conversation_history.append(f"User: {convo.message}")
+            conversation_history.append(f"Assistant: {convo.response}")
+        
+        # Create system prompt
+        import json
+        system_prompt = f"""You are a friendly, supportive personal AI assistant helping {current_user.username} with their habits and personal development.
+
+Current habits:
+{json.dumps(habit_context, indent=2)}
+
+Recent mood check-ins:
+{json.dumps(mood_context, indent=2)}
+
+Recent conversation history:
+{chr(10).join(conversation_history[-10:])}
+
+Guidelines:
+1. Be encouraging and supportive
+2. Reference their specific habits when relevant
+3. Acknowledge their mood and progress
+4. Provide actionable advice
+5. Keep responses concise but warm
+6. If they haven't completed habits today, gently encourage them
+7. Celebrate their successes and streaks"""
+
+        # Call AI API
+        if anthropic_client and os.getenv("ANTHROPIC_API_KEY"):
+            # Use Claude
+            response = anthropic_client.messages.create(
+                model="claude-3-haiku-20240307",  # Fast model for chat
+                max_tokens=500,
+                temperature=0.7,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": message.message}
+                ]
+            )
+            response_text = response.content[0].text
+        else:
+            # Fallback response for demo without API key
+            response_text = generate_demo_response(message.message, habit_context, mood_context)
         
         # Save conversation
         conversation = models.Conversation(
@@ -313,8 +379,74 @@ async def chat(
             response=response_text,
             timestamp=conversation.timestamp
         )
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Chat error: {str(e)}")
+        # Fallback response
+        response_text = "I'm here to help! Tell me about your day or ask me anything about your habits."
+        
+        conversation = models.Conversation(
+            user_id=current_user.id,
+            message=message.message,
+            response=response_text
+        )
+        db.add(conversation)
+        db.commit()
+        
+        return schemas.ChatResponse(
+            message=message.message,
+            response=response_text,
+            timestamp=conversation.timestamp
+        )
+
+def generate_demo_response(message: str, habits: list, moods: list) -> str:
+    """Generate a demo response when no AI API is available"""
+    message_lower = message.lower()
+    
+    if any(word in message_lower for word in ['habit', 'track', 'progress']):
+        if habits:
+            completed = sum(1 for h in habits if h['completed_today'])
+            total = len(habits)
+            return f"You're tracking {total} habits! You've completed {completed} out of {total} today. Keep up the great work! 🌟"
+        else:
+            return "I notice you haven't set up any habits yet. Would you like to start with something simple like daily meditation or drinking more water?"
+    
+    elif any(word in message_lower for word in ['feel', 'mood', 'today']):
+        if moods and moods[0]['mood']:
+            mood_score = moods[0]['mood']
+            if mood_score >= 4:
+                return "I'm glad you're feeling good! What's been going well for you today?"
+            else:
+                return "I hear you. Some days are tougher than others. What can I do to support you right now?"
+        else:
+            return "How are you feeling today? I'm here to listen and support you."
+    
+    elif any(word in message_lower for word in ['help', 'what can you']):
+        return "I can help you track habits, check in on your mood, provide motivation, and offer advice on building better routines. What would you like to focus on?"
+    
+    else:
+        return f"I understand you're asking about '{message}'. I'm here to support your personal growth journey. Feel free to ask me about your habits, mood, or anything else on your mind!"
+
+# Get chat history endpoint
+@app.get("/chat/history")
+def get_chat_history(
+    limit: int = 20,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    conversations = db.query(models.Conversation).filter(
+        models.Conversation.user_id == current_user.id
+    ).order_by(models.Conversation.timestamp.desc()).limit(limit).all()
+    
+    return [
+        {
+            "id": conv.id,
+            "message": conv.message,
+            "response": conv.response,
+            "timestamp": conv.timestamp
+        }
+        for conv in reversed(conversations)  # Return in chronological order
+    ]
 
 # Daily check-in endpoint
 @app.post("/checkin/daily", response_model=schemas.DailyCheckIn)
