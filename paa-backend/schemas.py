@@ -59,6 +59,50 @@ class DailyCheckIn(DailyCheckInCreate):
     class Config:
         from_attributes = True
 
+# Person schemas
+class PersonBase(BaseModel):
+    name: str
+    how_you_know_them: Optional[str] = None
+    pronouns: Optional[str] = None
+    description: Optional[str] = None
+
+class PersonCreate(PersonBase):
+    pass
+
+class PersonUpdate(PersonBase):
+    pass
+
+class Person(PersonBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# UserProfile schemas
+class UserProfileBase(BaseModel):
+    name: str
+    how_you_know_them: Optional[str] = None
+    pronouns: Optional[str] = None
+    description: Optional[str] = None
+
+class UserProfileCreate(UserProfileBase):
+    pass
+
+class UserProfileUpdate(UserProfileBase):
+    name: Optional[str] = None
+
+class UserProfile(UserProfileBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
 # Analytics schemas
 class HabitAnalytics(BaseModel):
     habit_id: int

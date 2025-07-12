@@ -17,6 +17,7 @@ Before proceeding with any development tasks, you MUST read these documents:
 2. **context/designs/paa-hackathon-architecture.md** - Simplified MVP architecture for hackathon
 3. **context/summaries/frontend-summary.md** - Complete frontend codebase overview
 4. **context/summaries/backend-summary.md** - Complete backend codebase overview
+5. **context/summaries/project-summary.md** - Complete project codebase overview
 
 ## Implementation Guidance
 - **Tech Stack**: FastAPI backend + Next.js frontend + SQLite database
@@ -42,4 +43,4 @@ Detailed step-by-step plans exist in the `context/plans/` directory but should o
 
 Remember: This is an MVP to demonstrate the proactive, persistent AI assistant concept in a hackathon setting. Focus on working functionality over polish.
 
-## WAIT FOR USER COMMAND. DO NOT DO ANYTHING ELSE! 
+## AFTER READING THE REQUIRED READINGS, WAIT FOR USER COMMAND. DO NOT DO ANYTHING ELSE! 

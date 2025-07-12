@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
-import { Target, MessageSquare, BarChart3, Smile } from 'lucide-react';
+import { Target, MessageSquare, BarChart3, Smile, Users, User } from 'lucide-react';
 import Link from 'next/link';
 import { DailyCheckInModal } from '@/app/components/DailyCheckInModal';
 import { useEffect, useState } from 'react';
@@ -55,11 +55,27 @@ export default function DashboardPage() {
 
   const quickActions = [
     {
+      title: 'Your Profile',
+      description: 'Manage your personal profile and information',
+      icon: User,
+      href: '/dashboard/profile',
+      color: 'bg-indigo-500',
+      isLink: true,
+    },
+    {
       title: 'Manage Habits',
       description: 'Track and update your daily habits',
       icon: Target,
       href: '/dashboard/habits',
       color: 'bg-blue-500',
+      isLink: true,
+    },
+    {
+      title: 'Manage People You Know',
+      description: 'Manage your relationships and connections',
+      icon: Users,
+      href: '/dashboard/people',
+      color: 'bg-green-500',
       isLink: true,
     },
     {

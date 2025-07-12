@@ -466,6 +466,142 @@ def create_daily_checkin(
     return db_checkin
 
 
+# People endpoints
+@app.get("/people", response_model=List[schemas.Person])
+def get_people(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    people = db.query(models.Person).filter(
+        models.Person.user_id == current_user.id
+    ).order_by(models.Person.name).all()
+    return people
+
+@app.post("/people", response_model=schemas.Person)
+def create_person(
+    person: schemas.PersonCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_person = models.Person(
+        **person.dict(),
+        user_id=current_user.id
+    )
+    db.add(db_person)
+    db.commit()
+    db.refresh(db_person)
+    return db_person
+
+@app.get("/people/{person_id}", response_model=schemas.Person)
+def get_person(
+    person_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    person = db.query(models.Person).filter(
+        models.Person.id == person_id,
+        models.Person.user_id == current_user.id
+    ).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    return person
+
+@app.put("/people/{person_id}", response_model=schemas.Person)
+def update_person(
+    person_id: int,
+    person_update: schemas.PersonUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    person = db.query(models.Person).filter(
+        models.Person.id == person_id,
+        models.Person.user_id == current_user.id
+    ).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    
+    for field, value in person_update.dict(exclude_unset=True).items():
+        setattr(person, field, value)
+    
+    person.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(person)
+    return person
+
+@app.delete("/people/{person_id}")
+def delete_person(
+    person_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    person = db.query(models.Person).filter(
+        models.Person.id == person_id,
+        models.Person.user_id == current_user.id
+    ).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    
+    db.delete(person)
+    db.commit()
+    return {"message": "Person deleted successfully"}
+
+
+# User Profile endpoints
+@app.get("/profile", response_model=schemas.UserProfile)
+def get_user_profile(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    profile = db.query(models.UserProfile).filter(
+        models.UserProfile.user_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return profile
+
+@app.post("/profile", response_model=schemas.UserProfile)
+def create_user_profile(
+    profile: schemas.UserProfileCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Check if profile already exists
+    existing_profile = db.query(models.UserProfile).filter(
+        models.UserProfile.user_id == current_user.id
+    ).first()
+    if existing_profile:
+        raise HTTPException(status_code=400, detail="Profile already exists")
+    
+    db_profile = models.UserProfile(
+        **profile.dict(),
+        user_id=current_user.id
+    )
+    db.add(db_profile)
+    db.commit()
+    db.refresh(db_profile)
+    return db_profile
+
+@app.put("/profile", response_model=schemas.UserProfile)
+def update_user_profile(
+    profile_update: schemas.UserProfileUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    profile = db.query(models.UserProfile).filter(
+        models.UserProfile.user_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    for field, value in profile_update.dict(exclude_unset=True).items():
+        setattr(profile, field, value)
+    
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
 # Analytics endpoints
 @app.get("/analytics/habits")
 def get_habits_analytics(

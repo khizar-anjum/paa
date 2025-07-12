@@ -1,7 +1,7 @@
 # Personal AI Assistant (PAA) - Backend Summary
 
 ## Overview
-FastAPI-based REST API providing authentication, habit tracking, AI chat, daily mood check-ins, and comprehensive analytics. Built with SQLAlchemy ORM, JWT authentication, and Anthropic AI integration. Fully functional MVP ready for hackathon demo.
+FastAPI-based REST API providing authentication, habit tracking, people management, user profiles, AI chat, daily mood check-ins, and comprehensive analytics. Built with SQLAlchemy ORM, JWT authentication, and Anthropic AI integration. Fully functional MVP ready for hackathon demo.
 
 ## Tech Stack
 - **Framework**: FastAPI
@@ -14,8 +14,8 @@ FastAPI-based REST API providing authentication, habit tracking, AI chat, daily 
 ## File Structure
 
 ### Core Files
-- `main.py` - FastAPI application with all endpoints (450+ lines)
-- `database.py` - SQLAlchemy models and database config
+- `main.py` - FastAPI application with all endpoints (550+ lines)
+- `database.py` - SQLAlchemy models and database config (7 models)
 - `auth.py` - JWT authentication and password management
 - `schemas.py` - Pydantic request/response validation
 - `requirements.txt` - Python dependencies
@@ -70,6 +70,30 @@ FastAPI-based REST API providing authentication, habit tracking, AI chat, daily 
 - timestamp: Check-in timestamp
 ```
 
+### Person Model (`database.py`)
+```python
+- id: Primary key
+- user_id: Foreign key to User
+- name: Person's name
+- how_you_know_them: Relationship context
+- pronouns: Person's pronouns
+- description: Markdown-compatible description
+- created_at: Creation timestamp
+- updated_at: Last update timestamp
+```
+
+### UserProfile Model (`database.py`)
+```python
+- id: Primary key
+- user_id: Foreign key to User (unique - one profile per user)
+- name: User's name
+- how_you_know_them: User's background
+- pronouns: User's pronouns
+- description: Markdown-compatible about section
+- created_at: Creation timestamp
+- updated_at: Last update timestamp
+```
+
 ## API Endpoints
 
 ### Authentication Endpoints
@@ -95,6 +119,18 @@ FastAPI-based REST API providing authentication, habit tracking, AI chat, daily 
 
 ### Daily Check-ins
 - `POST /checkin/daily` - Record daily mood check-in with notes
+
+### People Management
+- `GET /people` - Get user's people with name sorting
+- `POST /people` - Create new person
+- `GET /people/{person_id}` - Get specific person details
+- `PUT /people/{person_id}` - Update existing person
+- `DELETE /people/{person_id}` - Delete person
+
+### User Profile
+- `GET /profile` - Get user's profile
+- `POST /profile` - Create user profile (one per user)
+- `PUT /profile` - Update user profile
 
 ### Analytics Endpoints
 - `GET /analytics/habits` - Habit completion analytics with time range
@@ -156,6 +192,18 @@ Comprehensive analytics with time-range filtering:
 - `DailyCheckInCreate` - Check-in input (mood + notes)
 - `DailyCheckIn` - Check-in response
 
+### Person Schemas
+- `PersonBase` - Common person fields
+- `PersonCreate` - Person creation data
+- `PersonUpdate` - Person update data
+- `Person` - Complete person response
+
+### UserProfile Schemas
+- `UserProfileBase` - Common profile fields
+- `UserProfileCreate` - Profile creation data
+- `UserProfileUpdate` - Profile update data (all fields optional)
+- `UserProfile` - Complete profile response
+
 ### Analytics Schemas
 - `HabitAnalytics` - Detailed habit statistics
 - `MoodAnalytics` - Mood trend data
@@ -167,6 +215,8 @@ Comprehensive analytics with time-range filtering:
 User (1) ←→ (many) Habit
 User (1) ←→ (many) Conversation
 User (1) ←→ (many) DailyCheckIn
+User (1) ←→ (many) Person
+User (1) ←→ (1) UserProfile
 Habit (1) ←→ (many) HabitLog
 ```
 
@@ -206,10 +256,12 @@ Habit (1) ←→ (many) HabitLog
 ### Fully Implemented ✅
 - **Authentication**: Complete user registration and login system
 - **Habit Management**: Full CRUD with completion tracking and streaks
+- **People Management**: Full CRUD for relationship management with markdown support
+- **User Profiles**: Personal profile system reusing Person schema structure
 - **AI Chat**: Context-aware conversations with history
 - **Daily Check-ins**: Mood tracking with notes
 - **Analytics**: Comprehensive habit and mood analytics
-- **Database**: All models and relationships
+- **Database**: All 7 models and relationships
 - **API**: All planned endpoints functional
 
 ### Key Fixes Applied ✅

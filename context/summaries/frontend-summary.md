@@ -1,7 +1,7 @@
 # Personal AI Assistant (PAA) - Frontend Summary
 
 ## Overview
-Next.js 15.3.5 application with TypeScript providing a modern, responsive interface for a Personal AI Assistant. Features persistent chat architecture, comprehensive habit tracking, mood analytics, and daily check-ins. Built with App Router architecture and optimized for hackathon demo.
+Next.js 15.3.5 application with TypeScript providing a modern, responsive interface for a Personal AI Assistant. Features persistent chat architecture, comprehensive habit tracking, people management, user profiles, mood analytics, and daily check-ins. Built with App Router architecture and optimized for hackathon demo.
 
 ## Tech Stack
 - **Framework**: Next.js 15.3.5 (App Router)
@@ -12,6 +12,7 @@ Next.js 15.3.5 application with TypeScript providing a modern, responsive interf
 - **Icons**: Lucide React 0.400.0
 - **Notifications**: Sonner 1.4.0
 - **Charts**: Recharts 3.1.0
+- **Markdown**: React Markdown + Remark GFM
 
 ## Revolutionary Architecture
 
@@ -43,7 +44,9 @@ The app features a unique split-screen layout emphasizing chat as a persistent c
 #### Dashboard Section
 - `dashboard/layout.tsx` - Split-screen layout with persistent chat
 - `dashboard/page.tsx` - Main dashboard with real-time analytics
+- `dashboard/profile/page.tsx` - User profile management with markdown support
 - `dashboard/habits/page.tsx` - Habit management optimized for narrow layout
+- `dashboard/people/page.tsx` - People management with detailed profiles
 - `dashboard/analytics/page.tsx` - Comprehensive analytics dashboard
 
 #### Components (`/app/components/`)
@@ -51,12 +54,15 @@ The app features a unique split-screen layout emphasizing chat as a persistent c
 - `HabitCard.tsx` - Individual habit display (full-width optimized)
 - `CreateHabitModal.tsx` - New habit creation
 - `EditHabitModal.tsx` - Habit editing interface
+- `CreatePersonModal.tsx` - New person creation with markdown support
 - `DailyCheckInModal.tsx` - Mood check-in with 5 emoji options
 - `AnalyticsChart.tsx` - Recharts integration for visualizations
 
 ### Library (`/lib/`)
 - `auth-context.tsx` - Authentication context provider
 - `api/habits.ts` - Habits API service layer
+- `api/people.ts` - People management API service  
+- `api/profile.ts` - User profile API service
 - `api/chat.ts` - Chat API service with history
 - `api/analytics.ts` - Analytics API service
 
@@ -98,7 +104,9 @@ The app features a unique split-screen layout emphasizing chat as a persistent c
 
 ### Protected Routes (Split-Screen Dashboard)
 - `/dashboard` - Main dashboard with real-time quick stats
+- `/dashboard/profile` - User profile management with markdown editing
 - `/dashboard/habits` - Complete habit management system
+- `/dashboard/people` - People management with detailed profiles and markdown support
 - `/dashboard/analytics` - Progress analytics with charts
 
 ## Key Components
@@ -199,7 +207,9 @@ const hasBeenPromptedToday = localStorage.getItem(promptKey);
 - **Split-screen persistent chat architecture**
 - **Complete authentication system with middleware protection**
 - **Real-time dashboard with live analytics**
+- **User profile management with markdown support**
 - **Full habit management optimized for narrow layout**
+- **People management with detailed profiles and markdown rendering**
 - **Daily check-in system with smart prompting**
 - **Comprehensive analytics with charts and trends**
 - **Responsive design for all screen sizes**
@@ -216,6 +226,8 @@ const hasBeenPromptedToday = localStorage.getItem(promptKey);
 - **Narrow Layout Optimization**: Redesigned components for split-screen
 - **Smart Daily Prompting**: Respectful check-in reminders
 - **Real-time Analytics**: Live data updates throughout interface
+- **Unified Data Model**: People and Profile using same schema structure
+- **Markdown Integration**: Rich text support for descriptions and profiles
 
 ## File Connections
 1. `app/layout.tsx` → wraps app with `AuthProvider`

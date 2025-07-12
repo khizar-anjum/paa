@@ -25,6 +25,8 @@ class User(Base):
     habits = relationship("Habit", back_populates="user")
     conversations = relationship("Conversation", back_populates="user")
     checkins = relationship("DailyCheckIn", back_populates="user")
+    people = relationship("Person", back_populates="user")
+    profile = relationship("UserProfile", back_populates="user", uselist=False)
 
 class Habit(Base):
     __tablename__ = "habits"
@@ -70,6 +72,34 @@ class DailyCheckIn(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="checkins")
+
+class Person(Base):
+    __tablename__ = "people"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String, nullable=False)
+    how_you_know_them = Column(Text)
+    pronouns = Column(String)
+    description = Column(Text)  # Markdown compatible
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User", back_populates="people")
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)  # One profile per user
+    name = Column(String, nullable=False)
+    how_you_know_them = Column(Text)  # About yourself/background
+    pronouns = Column(String)
+    description = Column(Text)  # Markdown compatible
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User", back_populates="profile")
 
 # Create tables
 Base.metadata.create_all(bind=engine)
