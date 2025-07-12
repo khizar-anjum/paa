@@ -11,10 +11,12 @@ The Personal AI Assistant is designed to:
 - Maintain deep understanding of user's life through habits, mood, and conversations
 
 ## Required Reading
-Before proceeding with any development tasks, you MUST read these design documents:
+Before proceeding with any development tasks, you MUST read these documents:
 
 1. **context/designs/personal-ai-assistant-design.md** - Original comprehensive design vision
 2. **context/designs/paa-hackathon-architecture.md** - Simplified MVP architecture for hackathon
+3. **context/summaries/frontend-summary.md** - Complete frontend codebase overview
+4. **context/summaries/backend-summary.md** - Complete backend codebase overview
 
 ## Implementation Guidance
 - **Tech Stack**: FastAPI backend + Next.js frontend + SQLite database
