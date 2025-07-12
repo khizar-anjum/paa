@@ -40,7 +40,7 @@ export default function DashboardLayout({
     { name: 'Habits', href: '/dashboard/habits', icon: Target },
     { name: 'People', href: '/dashboard/people', icon: Users },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-    { name: 'Billing', href: '/billing', icon: CreditCard },
+    { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
   ];
 
   return (

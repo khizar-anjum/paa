@@ -12,7 +12,7 @@ export default function Billing() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-2 text-gray-600">Loading billing...</p>
@@ -22,11 +22,9 @@ export default function Billing() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Billing & Subscriptions</h1>
-        <BillingPage />
-      </div>
+    <div>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Billing & Subscriptions</h1>
+      <BillingPage />
     </div>
   )
 }
