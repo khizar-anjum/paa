@@ -36,6 +36,7 @@ Next.js 15.3.5 application with TypeScript, providing a modern interface for a P
 
 ### Library (`/lib/`)
 - `auth-context.tsx` - Authentication context provider
+- `api/habits.ts` - Habits API service layer
 
 ## Routing Structure
 
@@ -46,7 +47,7 @@ Next.js 15.3.5 application with TypeScript, providing a modern interface for a P
 
 ### Protected Routes (Dashboard)
 - `/dashboard` - Main dashboard
-- `/dashboard/habits` - Habit management (planned)
+- `/dashboard/habits` - Complete habit management system
 - `/dashboard/chat` - AI chat interface (planned)
 - `/dashboard/analytics` - Progress analytics (planned)
 - `/dashboard/checkin` - Daily mood check-in (planned)
@@ -78,6 +79,24 @@ Next.js 15.3.5 application with TypeScript, providing a modern interface for a P
 - Logout functionality
 - Responsive design
 
+### Habit Management System
+**Files**: 
+- `app/dashboard/habits/page.tsx` - Main habits page
+- `app/components/HabitCard.tsx` - Individual habit display
+- `app/components/CreateHabitModal.tsx` - New habit creation
+- `app/components/EditHabitModal.tsx` - Habit editing interface
+- `lib/api/habits.ts` - API service layer
+
+**Features**:
+- Full CRUD operations (Create, Read, Update, Delete)
+- AI-managed completion tracking (no manual "mark complete")
+- Weekly habit scheduling with day selection
+- Streak visualization and analytics
+- Edit functionality for all habit properties
+- Responsive card-based layout
+- Real-time status indicators (Completed/Pending)
+- Toast notifications for user feedback
+
 ## API Integration
 - **Base URL**: Configurable via `NEXT_PUBLIC_API_URL`
 - **Authentication**: Bearer token in headers
@@ -85,6 +104,12 @@ Next.js 15.3.5 application with TypeScript, providing a modern interface for a P
   - `POST /register` - User registration
   - `POST /token` - User login
   - `GET /users/me` - Current user profile
+  - `GET /habits` - Get all user habits with stats
+  - `POST /habits` - Create new habit
+  - `PUT /habits/{id}` - Update existing habit
+  - `DELETE /habits/{id}` - Delete habit
+  - `POST /habits/{id}/complete` - Complete habit (AI-managed)
+  - `GET /habits/{id}/stats` - Get habit statistics
 
 ## UI/UX Design
 - **Color Scheme**: Blue primary with gray accents
@@ -101,20 +126,29 @@ Next.js 15.3.5 application with TypeScript, providing a modern interface for a P
 - ✅ Dashboard layout and navigation
 - ✅ Landing page and auth pages
 - ✅ User session management
+- ✅ Full habit management system with CRUD operations
+- ✅ AI-managed habit completion tracking
+- ✅ Weekly habit scheduling with day selection
+- ✅ Habit editing and updating interface
+- ✅ Streak visualization and status indicators
+- ✅ Responsive habit card layout
 
 ### Planned Features (Routes Exist)
-- ⏳ Habit tracking system
 - ⏳ AI chat interface
 - ⏳ Analytics dashboard
 - ⏳ Daily mood check-in
 - ⏳ React Query integration
+- ⏳ Habit reminder notifications
 
 ## File Connections
 1. `app/layout.tsx` → wraps app with `AuthProvider`
 2. `middleware.ts` → uses cookies set by `AuthProvider`
 3. `dashboard/layout.tsx` → uses `useAuth` hook for user data
 4. All pages → use `useAuth` hook for auth state
-5. `auth-context.tsx` → manages all API communications
+5. `auth-context.tsx` → manages authentication API communications
+6. `lib/api/habits.ts` → manages habit-related API communications
+7. `dashboard/habits/page.tsx` → uses habit components and API service
+8. Habit components → use shared types and toast notifications
 
 ## Security Features
 - Route protection via middleware

@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from sqlalchemy import func, and_
 import os
 from dotenv import load_dotenv
 
@@ -90,10 +91,39 @@ def get_habits(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    return db.query(models.Habit).filter(
+    habits = db.query(models.Habit).filter(
         models.Habit.user_id == current_user.id,
         models.Habit.is_active == 1
     ).all()
+    
+    # Add stats to each habit
+    for habit in habits:
+        # Check if completed today
+        today_start = datetime.combine(date.today(), datetime.min.time())
+        habit.completed_today = db.query(models.HabitLog).filter(
+            models.HabitLog.habit_id == habit.id,
+            models.HabitLog.completed_at >= today_start
+        ).first() is not None
+        
+        # Get streak
+        logs = db.query(models.HabitLog).filter(
+            models.HabitLog.habit_id == habit.id
+        ).order_by(models.HabitLog.completed_at.desc()).limit(30).all()
+        
+        current_streak = 0
+        if logs:
+            check_date = date.today()
+            for log in logs:
+                log_date = log.completed_at.date()
+                if log_date == check_date or (current_streak == 0 and log_date == check_date - timedelta(days=1)):
+                    current_streak += 1
+                    check_date = log_date - timedelta(days=1)
+                else:
+                    break
+        
+        habit.current_streak = current_streak
+    
+    return habits
 
 @app.post("/habits", response_model=schemas.Habit)
 def create_habit(
@@ -109,6 +139,138 @@ def create_habit(
     db.commit()
     db.refresh(db_habit)
     return db_habit
+
+# Add habit completion endpoint
+@app.post("/habits/{habit_id}/complete")
+def complete_habit(
+    habit_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify habit belongs to user
+    habit = db.query(models.Habit).filter(
+        models.Habit.id == habit_id,
+        models.Habit.user_id == current_user.id
+    ).first()
+    
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    # Check if already completed today
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    existing_log = db.query(models.HabitLog).filter(
+        models.HabitLog.habit_id == habit_id,
+        models.HabitLog.completed_at >= today_start
+    ).first()
+    
+    if existing_log:
+        raise HTTPException(status_code=400, detail="Habit already completed today")
+    
+    # Create completion log
+    log = models.HabitLog(habit_id=habit_id)
+    db.add(log)
+    db.commit()
+    
+    return {"message": "Habit completed!", "completed_at": log.completed_at}
+
+# Add habit stats endpoint
+@app.get("/habits/{habit_id}/stats")
+def get_habit_stats(
+    habit_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify habit belongs to user
+    habit = db.query(models.Habit).filter(
+        models.Habit.id == habit_id,
+        models.Habit.user_id == current_user.id
+    ).first()
+    
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    # Calculate stats
+    total_completions = db.query(func.count(models.HabitLog.id)).filter(
+        models.HabitLog.habit_id == habit_id
+    ).scalar()
+    
+    # Calculate current streak
+    logs = db.query(models.HabitLog).filter(
+        models.HabitLog.habit_id == habit_id
+    ).order_by(models.HabitLog.completed_at.desc()).all()
+    
+    current_streak = 0
+    if logs:
+        check_date = date.today()
+        for log in logs:
+            log_date = log.completed_at.date()
+            if log_date == check_date:
+                current_streak += 1
+                check_date -= timedelta(days=1)
+            elif log_date == check_date - timedelta(days=1):
+                current_streak += 1
+                check_date = log_date - timedelta(days=1)
+            else:
+                break
+    
+    # Check if completed today
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    completed_today = db.query(models.HabitLog).filter(
+        models.HabitLog.habit_id == habit_id,
+        models.HabitLog.completed_at >= today_start
+    ).first() is not None
+    
+    return {
+        "habit_id": habit_id,
+        "total_completions": total_completions,
+        "current_streak": current_streak,
+        "completed_today": completed_today
+    }
+
+# Update habit endpoint
+@app.put("/habits/{habit_id}", response_model=schemas.Habit)
+def update_habit(
+    habit_id: int,
+    habit_update: schemas.HabitCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    habit = db.query(models.Habit).filter(
+        models.Habit.id == habit_id,
+        models.Habit.user_id == current_user.id
+    ).first()
+    
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    # Update habit fields
+    for field, value in habit_update.dict().items():
+        setattr(habit, field, value)
+    
+    db.commit()
+    db.refresh(habit)
+    return habit
+
+# Delete habit endpoint
+@app.delete("/habits/{habit_id}")
+def delete_habit(
+    habit_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    habit = db.query(models.Habit).filter(
+        models.Habit.id == habit_id,
+        models.Habit.user_id == current_user.id
+    ).first()
+    
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    # Soft delete
+    habit.is_active = 0
+    db.commit()
+    
+    return {"message": "Habit deleted successfully"}
 
 # Chat endpoint (placeholder for now)
 @app.post("/chat", response_model=schemas.ChatResponse)

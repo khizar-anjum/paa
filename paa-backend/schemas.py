@@ -31,6 +31,8 @@ class Habit(HabitBase):
     user_id: int
     created_at: datetime
     is_active: int
+    completed_today: bool = False
+    current_streak: int = 0
     
     class Config:
         from_attributes = True

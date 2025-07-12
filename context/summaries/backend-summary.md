@@ -79,8 +79,12 @@ FastAPI-based REST API providing authentication, habit tracking, AI chat, and mo
 - `GET /users/me` - Get current authenticated user
 
 ### Habit Management
-- `GET /habits` - Get user's active habits
+- `GET /habits` - Get user's active habits with stats (streak, completion status)
 - `POST /habits` - Create new habit
+- `PUT /habits/{habit_id}` - Update existing habit
+- `DELETE /habits/{habit_id}` - Soft delete habit
+- `POST /habits/{habit_id}/complete` - Mark habit as completed for today
+- `GET /habits/{habit_id}/stats` - Get detailed habit statistics
 
 ### AI Chat
 - `POST /chat` - AI conversation endpoint
@@ -112,7 +116,7 @@ FastAPI-based REST API providing authentication, habit tracking, AI chat, and mo
 ### Habit Schemas
 - `HabitBase` - Common habit fields
 - `HabitCreate` - Habit creation data
-- `Habit` - Complete habit response
+- `Habit` - Complete habit response with stats (completed_today, current_streak)
 
 ### Chat Schemas
 - `ChatMessage` - Chat input
@@ -171,7 +175,11 @@ Habit (1) ←→ (many) HabitLog
 ### Fully Implemented ✅
 - User registration and authentication
 - JWT token system
-- Habit creation and retrieval
+- Complete habit management CRUD operations
+- Habit completion tracking with duplicate prevention
+- Habit streak calculation (current streak, total completions)
+- AI-managed habit completion system
+- Weekly habit scheduling with day selection
 - Basic AI chat functionality
 - Daily mood check-ins
 - Database models and relationships
@@ -182,12 +190,12 @@ Habit (1) ←→ (many) HabitLog
 - Analytics schemas (defined but no endpoints)
 
 ### Missing Features ⏳
-- Habit completion logging endpoints
 - Advanced analytics and reporting
-- Habit streak calculations
 - Notification system
 - Enhanced AI personalization
 - Data export/import
+- Habit reminder notifications
+- Advanced streak analytics (longest streak, etc.)
 
 ## Dependencies (`requirements.txt`)
 
