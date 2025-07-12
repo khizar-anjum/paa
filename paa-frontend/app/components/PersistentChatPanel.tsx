@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Brain, User } from 'lucide-react';
+import { Send, Loader2, Brain, User, Clock, CheckCircle, X, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { chatApi, ChatHistory } from '@/lib/api/chat';
+import { proactiveApi, ProactiveMessage, Commitment } from '@/lib/api/proactive';
 
 export function PersistentChatPanel() {
   const [messages, setMessages] = useState<ChatHistory[]>([]);
+  const [proactiveMessages, setProactiveMessages] = useState<ProactiveMessage[]>([]);
+  const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -14,6 +17,7 @@ export function PersistentChatPanel() {
 
   useEffect(() => {
     loadChatHistory();
+    loadProactiveData();
   }, []);
 
   useEffect(() => {
@@ -29,6 +33,19 @@ export function PersistentChatPanel() {
       toast.error('Failed to load chat history');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadProactiveData = async () => {
+    try {
+      const [proactiveData, commitmentsData] = await Promise.all([
+        proactiveApi.getProactiveMessages(),
+        proactiveApi.getCommitments()
+      ]);
+      setProactiveMessages(proactiveData);
+      setCommitments(commitmentsData);
+    } catch (error) {
+      console.error('Failed to load proactive data:', error);
     }
   };
 
@@ -87,6 +104,38 @@ export function PersistentChatPanel() {
     }
   };
 
+  const handleCommitmentAction = async (commitmentId: number, action: 'complete' | 'dismiss' | 'postpone') => {
+    try {
+      switch (action) {
+        case 'complete':
+          await proactiveApi.completeCommitment(commitmentId);
+          toast.success('Commitment marked as completed!');
+          break;
+        case 'dismiss':
+          await proactiveApi.dismissCommitment(commitmentId);
+          toast.success('Commitment dismissed');
+          break;
+        case 'postpone':
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          await proactiveApi.postponeCommitment(commitmentId, tomorrow.toISOString().split('T')[0]);
+          toast.success('Commitment postponed to tomorrow');
+          break;
+      }
+      // Reload data to update UI
+      loadProactiveData();
+    } catch (error) {
+      toast.error(`Failed to ${action} commitment`);
+    }
+  };
+
+  const findCommitmentForMessage = (message: ProactiveMessage): Commitment | undefined => {
+    if (message.related_commitment_id) {
+      return commitments.find(c => c.id === message.related_commitment_id);
+    }
+    return undefined;
+  };
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -108,10 +157,60 @@ export function PersistentChatPanel() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
+        {/* Show proactive messages first */}
+        {proactiveMessages.filter(pm => !pm.user_responded).map((proactiveMsg) => {
+          const relatedCommitment = findCommitmentForMessage(proactiveMsg);
+          return (
+            <div key={`proactive-${proactiveMsg.id}`} className="space-y-3">
+              {/* Proactive AI message */}
+              <div className="flex justify-start">
+                <div className="max-w-[85%] bg-yellow-50 border border-yellow-200 text-gray-900 rounded-lg p-3">
+                  <div className="flex items-center mb-1">
+                    <Clock className="h-3 w-3 mr-1 text-yellow-600" />
+                    <span className="text-xs text-yellow-600 font-medium">Proactive Message</span>
+                    {proactiveMsg.sent_at && (
+                      <span className="text-xs text-gray-500 ml-2">{formatTime(proactiveMsg.sent_at)}</span>
+                    )}
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap mb-2">{proactiveMsg.content}</p>
+                  
+                  {/* Action buttons for commitment reminders */}
+                  {proactiveMsg.message_type === 'commitment_reminder' && relatedCommitment && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button
+                        onClick={() => handleCommitmentAction(relatedCommitment.id, 'complete')}
+                        className="flex items-center px-3 py-1 bg-green-100 text-green-700 rounded-md text-xs hover:bg-green-200 transition-colors"
+                      >
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Done
+                      </button>
+                      <button
+                        onClick={() => handleCommitmentAction(relatedCommitment.id, 'postpone')}
+                        className="flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-xs hover:bg-blue-200 transition-colors"
+                      >
+                        <Calendar className="h-3 w-3 mr-1" />
+                        Tomorrow
+                      </button>
+                      <button
+                        onClick={() => handleCommitmentAction(relatedCommitment.id, 'dismiss')}
+                        className="flex items-center px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-xs hover:bg-gray-200 transition-colors"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Regular chat messages */}
+        {messages.length === 0 && proactiveMessages.filter(pm => !pm.user_responded).length === 0 ? (
           <div className="text-center text-gray-500 mt-8">
             <p className="text-base mb-2">👋 Hi there!</p>
-            <p className="text-sm">I'm here to help you with your habits and goals. What's on your mind?</p>
+            <p className="text-sm">I&apos;m here to help you with your habits and goals. What&apos;s on your mind?</p>
           </div>
         ) : (
           messages.map((msg) => (

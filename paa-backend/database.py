@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean, Date, Time
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -27,6 +27,9 @@ class User(Base):
     checkins = relationship("DailyCheckIn", back_populates="user")
     people = relationship("Person", back_populates="user")
     profile = relationship("UserProfile", back_populates="user", uselist=False)
+    commitments = relationship("Commitment", back_populates="user")
+    proactive_messages = relationship("ProactiveMessage", back_populates="user")
+    scheduled_prompts = relationship("ScheduledPrompt", back_populates="user")
 
 class Habit(Base):
     __tablename__ = "habits"
@@ -100,6 +103,54 @@ class UserProfile(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     user = relationship("User", back_populates="profile")
+
+class Commitment(Base):
+    __tablename__ = "commitments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    task_description = Column(Text, nullable=False)
+    original_message = Column(Text)
+    deadline = Column(Date)
+    status = Column(String, default="pending")  # pending, completed, missed, dismissed
+    created_from_conversation_id = Column(Integer, ForeignKey("conversations.id"))
+    last_reminded_at = Column(DateTime)
+    reminder_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="commitments")
+    conversation = relationship("Conversation")
+
+class ProactiveMessage(Base):
+    __tablename__ = "proactive_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    message_type = Column(String)  # commitment_reminder, scheduled_prompt, escalation
+    content = Column(Text, nullable=False)
+    related_commitment_id = Column(Integer, ForeignKey("commitments.id"))
+    scheduled_for = Column(DateTime)
+    sent_at = Column(DateTime)
+    user_responded = Column(Boolean, default=False)
+    response_content = Column(Text)
+    
+    user = relationship("User", back_populates="proactive_messages")
+    commitment = relationship("Commitment")
+
+class ScheduledPrompt(Base):
+    __tablename__ = "scheduled_prompts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    prompt_type = Column(String)  # work_checkin, morning_motivation, evening_reflection
+    schedule_time = Column(Time)
+    schedule_days = Column(String)  # "monday,tuesday,wednesday,thursday,friday"
+    prompt_template = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    last_sent_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="scheduled_prompts")
 
 # Create tables
 Base.metadata.create_all(bind=engine)

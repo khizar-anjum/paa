@@ -17,6 +17,8 @@ from auth import (
 import schemas
 import database as models
 from anthropic import Anthropic
+from scheduler import start_scheduler, stop_scheduler, initialize_default_prompts_for_user_sync
+import atexit
 
 load_dotenv()
 
@@ -36,6 +38,15 @@ app.add_middleware(
 
 # Initialize Anthropic client
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+
+# We'll initialize the scheduler on FastAPI startup instead of at import time
+# Register cleanup function for graceful shutdown
+atexit.register(stop_scheduler)
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background scheduler when FastAPI starts"""
+    start_scheduler()
 
 @app.get("/")
 def read_root():
@@ -65,6 +76,13 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    # Initialize default scheduled prompts for new user
+    try:
+        initialize_default_prompts_for_user_sync(db_user.id)
+    except Exception as e:
+        print(f"Note: Default prompts initialization skipped: {e}")
+    
     return db_user
 
 @app.post("/token")
@@ -600,6 +618,138 @@ def update_user_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+
+# Proactive AI endpoints
+
+# Commitment management endpoints
+@app.get("/commitments", response_model=List[schemas.Commitment])
+def get_commitments(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    commitments = db.query(models.Commitment).filter(
+        models.Commitment.user_id == current_user.id
+    ).order_by(models.Commitment.created_at.desc()).all()
+    return commitments
+
+@app.post("/commitments/{commitment_id}/complete")
+def complete_commitment(
+    commitment_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    commitment.status = "completed"
+    db.commit()
+    return {"message": "Commitment marked as completed"}
+
+@app.post("/commitments/{commitment_id}/dismiss")
+def dismiss_commitment(
+    commitment_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    commitment.status = "dismissed"
+    db.commit()
+    return {"message": "Commitment dismissed"}
+
+@app.post("/commitments/{commitment_id}/postpone")
+def postpone_commitment(
+    commitment_id: int,
+    commitment_update: schemas.CommitmentUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    if commitment_update.deadline:
+        commitment.deadline = commitment_update.deadline
+    commitment.status = "pending"
+    commitment.reminder_count = 0  # Reset reminder count
+    db.commit()
+    return {"message": "Commitment postponed"}
+
+# Proactive message endpoints
+@app.get("/proactive-messages", response_model=List[schemas.ProactiveMessage])
+def get_proactive_messages(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    messages = db.query(models.ProactiveMessage).filter(
+        models.ProactiveMessage.user_id == current_user.id,
+        models.ProactiveMessage.sent_at.isnot(None)
+    ).order_by(models.ProactiveMessage.sent_at.desc()).limit(50).all()
+    return messages
+
+@app.post("/proactive-messages/{message_id}/acknowledge")
+def acknowledge_proactive_message(
+    message_id: int,
+    response: schemas.ProactiveMessageResponse,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    message = db.query(models.ProactiveMessage).filter(
+        models.ProactiveMessage.id == message_id,
+        models.ProactiveMessage.user_id == current_user.id
+    ).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    message.user_responded = True
+    message.response_content = response.response_content
+    db.commit()
+    return {"message": "Message acknowledged"}
+
+# Scheduled prompt endpoints
+@app.get("/scheduled-prompts", response_model=List[schemas.ScheduledPrompt])
+def get_scheduled_prompts(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    prompts = db.query(models.ScheduledPrompt).filter(
+        models.ScheduledPrompt.user_id == current_user.id
+    ).all()
+    return prompts
+
+@app.put("/scheduled-prompts/{prompt_id}", response_model=schemas.ScheduledPrompt)
+def update_scheduled_prompt(
+    prompt_id: int,
+    prompt_update: schemas.ScheduledPromptUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    prompt = db.query(models.ScheduledPrompt).filter(
+        models.ScheduledPrompt.id == prompt_id,
+        models.ScheduledPrompt.user_id == current_user.id
+    ).first()
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Scheduled prompt not found")
+    
+    for field, value in prompt_update.dict(exclude_unset=True).items():
+        setattr(prompt, field, value)
+    
+    db.commit()
+    db.refresh(prompt)
+    return prompt
 
 
 # Analytics endpoints
