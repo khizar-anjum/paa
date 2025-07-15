@@ -1,4 +1,4 @@
-# Personal AI Assistant (PAA) - Backend Summary
+# Proactive AI Assistant (PAA) - Backend Summary
 
 ## Overview
 FastAPI-based REST API providing authentication, habit tracking, people management, user profiles, AI chat, daily mood check-ins, and comprehensive analytics. Built with SQLAlchemy ORM, JWT authentication, and Anthropic AI integration. Fully functional MVP ready for hackathon demo.
@@ -311,7 +311,7 @@ Habit (1) ←→ (many) HabitLog
 - **Demo Ready**: Fully functional for hackathon presentation
 
 ## Development Notes
-- Solid foundation for personal AI assistant
+- Solid foundation for proactive AI assistant
 - Expandable architecture with clean separation
 - All planned Phase 4 and Phase 5 features implemented
 - Suitable for MVP/hackathon demo

@@ -1,7 +1,7 @@
-# Personal AI Assistant (PAA) - Frontend Summary
+# Proactive AI Assistant (PAA) - Frontend Summary
 
 ## Overview
-Next.js 15.3.5 application with TypeScript providing a modern, responsive interface for a Personal AI Assistant. Features persistent chat architecture, comprehensive habit tracking, people management, user profiles, mood analytics, and daily check-ins. Built with App Router architecture and optimized for hackathon demo.
+Next.js 15.3.5 application with TypeScript providing a modern, responsive interface for a Proactive AI Assistant. Features persistent chat architecture, comprehensive habit tracking, people management, user profiles, mood analytics, and daily check-ins. Built with App Router architecture and optimized for hackathon demo.
 
 ## Tech Stack
 - **Framework**: Next.js 15.3.5 (App Router)
