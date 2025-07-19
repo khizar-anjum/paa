@@ -355,7 +355,64 @@ async def chat(
             conversation_history.append(f"User: {convo.message}")
             conversation_history.append(f"Assistant: {convo.response}")
         
-        # Detect commitments in the user's message
+        # Check if this is a response to a commitment reminder
+        # Get recent proactive messages and active commitments
+        recent_proactive = db.query(models.ProactiveMessage).filter(
+            models.ProactiveMessage.user_id == current_user.id,
+            models.ProactiveMessage.user_responded == False,
+            models.ProactiveMessage.message_type == 'commitment_reminder'
+        ).order_by(models.ProactiveMessage.sent_at.desc()).limit(5).all()
+        
+        active_commitments = db.query(models.Commitment).filter(
+            models.Commitment.user_id == current_user.id,
+            models.Commitment.status == 'pending'
+        ).all()
+        
+        # Check if user's message indicates completion, dismissal, or postponement
+        commitment_action_taken = False
+        message_lower = message.message.lower()
+        
+        # Keywords for different actions
+        completion_keywords = ['done', 'completed', 'finished', 'did it', 'just did', 'already did', 'yes', 'yep', 'yeah']
+        dismissal_keywords = ['cancel', 'dismiss', 'forget it', 'nevermind', 'no longer', 'not doing', 'skip']
+        postpone_keywords = ['tomorrow', 'later', 'postpone', 'delay', 'not today', 'maybe tomorrow']
+        
+        # If there are recent proactive messages about commitments
+        if recent_proactive and active_commitments:
+            # Find which commitment the user might be responding to
+            for proactive_msg in recent_proactive:
+                if proactive_msg.related_commitment_id:
+                    commitment = next((c for c in active_commitments if c.id == proactive_msg.related_commitment_id), None)
+                    if commitment:
+                        # Check if user's response relates to this commitment
+                        if any(keyword in message_lower for keyword in completion_keywords):
+                            # Mark commitment as completed
+                            commitment.status = 'completed'
+                            proactive_msg.user_responded = True
+                            proactive_msg.response_content = message.message
+                            commitment_action_taken = True
+                            db.commit()
+                            break
+                        elif any(keyword in message_lower for keyword in dismissal_keywords):
+                            # Dismiss commitment
+                            commitment.status = 'dismissed'
+                            proactive_msg.user_responded = True
+                            proactive_msg.response_content = message.message
+                            commitment_action_taken = True
+                            db.commit()
+                            break
+                        elif any(keyword in message_lower for keyword in postpone_keywords):
+                            # Postpone commitment to tomorrow
+                            tomorrow = time_service.now().date() + timedelta(days=1)
+                            commitment.deadline = tomorrow
+                            commitment.reminder_count = 0  # Reset reminder count
+                            proactive_msg.user_responded = True
+                            proactive_msg.response_content = message.message
+                            commitment_action_taken = True
+                            db.commit()
+                            break
+        
+        # Detect new commitments in the user's message
         detected_commitments = commitment_parser.extract_commitments(message.message)
         commitment_acknowledgments = []
         
@@ -394,6 +451,17 @@ async def chat(
         # Create system prompt
         import json
         commitment_context = ""
+        commitment_action_context = ""
+        
+        if commitment_action_taken and 'commitment' in locals():
+            # Add context about the commitment action taken
+            if commitment.status == 'completed':
+                commitment_action_context = f"\n\nThe user just completed their commitment: '{commitment.task_description}'. Acknowledge this accomplishment warmly!"
+            elif commitment.status == 'dismissed':
+                commitment_action_context = f"\n\nThe user decided to cancel their commitment: '{commitment.task_description}'. Be understanding and supportive."
+            elif commitment.deadline:
+                commitment_action_context = f"\n\nThe user postponed their commitment '{commitment.task_description}' to tomorrow. Be supportive and remind them you'll check in tomorrow."
+        
         if commitment_acknowledgments:
             commitment_context = f"""
 
@@ -413,6 +481,7 @@ Recent mood check-ins:
 Recent conversation history:
 {chr(10).join(conversation_history[-10:])}
 {commitment_context}
+{commitment_action_context}
 
 Guidelines:
 1. Be encouraging and supportive

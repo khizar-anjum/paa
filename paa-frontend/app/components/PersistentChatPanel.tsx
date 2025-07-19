@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Brain, User, Clock, CheckCircle, X, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Loader2, Brain, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { chatApi, ChatHistory } from '@/lib/api/chat';
 import { proactiveApi, ProactiveMessage, Commitment } from '@/lib/api/proactive';
@@ -66,6 +66,7 @@ export function PersistentChatPanel() {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
+    // Since we have date separators, just show the time
     return date.toLocaleTimeString('en-US', { 
       hour: 'numeric', 
       minute: '2-digit',
@@ -115,37 +116,6 @@ export function PersistentChatPanel() {
     }
   };
 
-  const handleCommitmentAction = async (commitmentId: number, action: 'complete' | 'dismiss' | 'postpone') => {
-    try {
-      switch (action) {
-        case 'complete':
-          await proactiveApi.completeCommitment(commitmentId);
-          toast.success('Commitment marked as completed!');
-          break;
-        case 'dismiss':
-          await proactiveApi.dismissCommitment(commitmentId);
-          toast.success('Commitment dismissed');
-          break;
-        case 'postpone':
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          await proactiveApi.postponeCommitment(commitmentId, tomorrow.toISOString().split('T')[0]);
-          toast.success('Commitment postponed to tomorrow');
-          break;
-      }
-      // Reload data to update UI
-      loadProactiveData();
-    } catch (error) {
-      toast.error(`Failed to ${action} commitment`);
-    }
-  };
-
-  const findCommitmentForMessage = (message: ProactiveMessage): Commitment | undefined => {
-    if (message.related_commitment_id) {
-      return commitments.find(c => c.id === message.related_commitment_id);
-    }
-    return undefined;
-  };
 
   if (isLoading) {
     return (
@@ -168,88 +138,128 @@ export function PersistentChatPanel() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Show proactive messages first */}
-        {proactiveMessages.filter(pm => !pm.user_responded).map((proactiveMsg) => {
-          const relatedCommitment = findCommitmentForMessage(proactiveMsg);
-          return (
-            <div key={`proactive-${proactiveMsg.id}`} className="space-y-3">
-              {/* Proactive AI message */}
-              <div className="flex justify-start">
-                <div className="max-w-[85%] bg-yellow-50 border border-yellow-200 text-gray-900 rounded-lg p-3">
-                  <div className="flex items-center mb-1">
-                    <Clock className="h-3 w-3 mr-1 text-yellow-600" />
-                    <span className="text-xs text-yellow-600 font-medium">Proactive Message</span>
-                    {proactiveMsg.sent_at && (
-                      <span className="text-xs text-gray-500 ml-2">{formatTime(proactiveMsg.sent_at)}</span>
-                    )}
-                  </div>
-                  <p className="text-sm whitespace-pre-wrap mb-2">{proactiveMsg.content}</p>
-                  
-                  {/* Action buttons for commitment reminders */}
-                  {proactiveMsg.message_type === 'commitment_reminder' && relatedCommitment && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <button
-                        onClick={() => handleCommitmentAction(relatedCommitment.id, 'complete')}
-                        className="flex items-center px-3 py-1 bg-green-100 text-green-700 rounded-md text-xs hover:bg-green-200 transition-colors"
-                      >
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Done
-                      </button>
-                      <button
-                        onClick={() => handleCommitmentAction(relatedCommitment.id, 'postpone')}
-                        className="flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-xs hover:bg-blue-200 transition-colors"
-                      >
-                        <Calendar className="h-3 w-3 mr-1" />
-                        Tomorrow
-                      </button>
-                      <button
-                        onClick={() => handleCommitmentAction(relatedCommitment.id, 'dismiss')}
-                        className="flex items-center px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-xs hover:bg-gray-200 transition-colors"
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Dismiss
-                      </button>
+        {/* Combine all messages (proactive and regular) into a single timeline */}
+        {(() => {
+          // Create a combined array of messages with their types and timestamps
+          const allMessages: Array<{
+            type: 'proactive' | 'chat';
+            message: ProactiveMessage | ChatHistory;
+            timestamp: string;
+          }> = [];
+
+          // Add proactive messages that haven't been responded to
+          proactiveMessages.filter(pm => !pm.user_responded).forEach(pm => {
+            allMessages.push({
+              type: 'proactive',
+              message: pm,
+              timestamp: pm.sent_at || new Date().toISOString()
+            });
+          });
+
+          // Add regular chat messages
+          messages.forEach(msg => {
+            allMessages.push({
+              type: 'chat',
+              message: msg,
+              timestamp: msg.timestamp
+            });
+          });
+
+          // Sort by timestamp
+          allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+          if (allMessages.length === 0) {
+            return (
+              <div className="text-center text-gray-500 mt-8">
+                <p className="text-base mb-2">👋 Hi there!</p>
+                <p className="text-sm">I&apos;m here to help you with your habits and goals. What&apos;s on your mind?</p>
+              </div>
+            );
+          }
+
+          return allMessages.map((item, index) => {
+            // Check if we need to show a date separator
+            const showDateSeparator = index === 0 || 
+              new Date(item.timestamp).toDateString() !== 
+              new Date(allMessages[index - 1].timestamp).toDateString();
+            
+            const dateSeparator = showDateSeparator ? (
+              <div key={`date-${item.timestamp}`} className="flex items-center justify-center my-4">
+                <div className="flex-grow border-t border-gray-200"></div>
+                <span className="px-3 text-xs text-gray-500 bg-gray-50">
+                  {(() => {
+                    const date = new Date(item.timestamp);
+                    const now = new Date();
+                    const isToday = date.toDateString() === now.toDateString();
+                    const yesterday = new Date(now);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const isYesterday = date.toDateString() === yesterday.toDateString();
+                    
+                    if (isToday) return 'Today';
+                    if (isYesterday) return 'Yesterday';
+                    return date.toLocaleDateString('en-US', { 
+                      month: 'long', 
+                      day: 'numeric',
+                      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+                    });
+                  })()}
+                </span>
+                <div className="flex-grow border-t border-gray-200"></div>
+              </div>
+            ) : null;
+            
+            const messageElement = (() => {
+              if (item.type === 'proactive') {
+                const proactiveMsg = item.message as ProactiveMessage;
+                return (
+                  <div key={`proactive-${proactiveMsg.id}`} className="flex justify-start">
+                    <div className="max-w-[85%] bg-gray-100 text-gray-900 rounded-lg p-3">
+                      <div className="flex items-center mb-1">
+                        <Brain className="h-3 w-3 mr-1 text-blue-600" />
+                        <span className="text-xs text-gray-500">{formatTime(proactiveMsg.sent_at || new Date().toISOString())}</span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{proactiveMsg.content}</p>
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Regular chat messages */}
-        {messages.length === 0 && proactiveMessages.filter(pm => !pm.user_responded).length === 0 ? (
-          <div className="text-center text-gray-500 mt-8">
-            <p className="text-base mb-2">👋 Hi there!</p>
-            <p className="text-sm">I&apos;m here to help you with your habits and goals. What&apos;s on your mind?</p>
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <div key={msg.id} className="space-y-3">
-              {/* User message */}
-              <div className="flex justify-end">
-                <div className="max-w-[85%] bg-blue-600 text-white rounded-lg p-3">
-                  <div className="flex items-center mb-1">
-                    <User className="h-3 w-3 mr-1" />
-                    <span className="text-xs opacity-75">{formatTime(msg.timestamp)}</span>
                   </div>
-                  <p className="text-sm">{msg.message}</p>
-                </div>
-              </div>
+                );
+              } else {
+                const chatMsg = item.message as ChatHistory;
+                return (
+                  <div key={chatMsg.id} className="space-y-3">
+                    {/* User message */}
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] bg-blue-600 text-white rounded-lg p-3">
+                        <div className="flex items-center mb-1">
+                          <User className="h-3 w-3 mr-1" />
+                          <span className="text-xs opacity-75">{formatTime(chatMsg.timestamp)}</span>
+                        </div>
+                        <p className="text-sm">{chatMsg.message}</p>
+                      </div>
+                    </div>
 
-              {/* AI response */}
-              <div className="flex justify-start">
-                <div className="max-w-[85%] bg-gray-100 text-gray-900 rounded-lg p-3">
-                  <div className="flex items-center mb-1">
-                    <Brain className="h-3 w-3 mr-1 text-blue-600" />
-                    <span className="text-xs text-gray-500">{formatTime(msg.timestamp)}</span>
+                    {/* AI response */}
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] bg-gray-100 text-gray-900 rounded-lg p-3">
+                        <div className="flex items-center mb-1">
+                          <Brain className="h-3 w-3 mr-1 text-blue-600" />
+                          <span className="text-xs text-gray-500">{formatTime(chatMsg.timestamp)}</span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{chatMsg.response}</p>
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">{msg.response}</p>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
+                );
+              }
+            })();
+            
+            return (
+              <React.Fragment key={`msg-group-${index}`}>
+                {dateSeparator}
+                {messageElement}
+              </React.Fragment>
+            );
+          });
+        })()}
         <div ref={messagesEndRef} />
       </div>
 
