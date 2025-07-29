@@ -221,7 +221,7 @@ def create_habit(
     try:
         vector_store.embed_habit(db_habit, db)
     except Exception as e:
-        logger.warning(f"Failed to embed habit {db_habit.id}: {e}")
+        debug_logger.warning(f"Failed to embed habit {db_habit.id}: {e}")
     
     return db_habit
 
@@ -685,7 +685,7 @@ async def enhanced_chat(
         try:
             vector_store.embed_conversation(conversation)
         except Exception as e:
-            logger.warning(f"Failed to embed conversation {conversation.id}: {e}")
+            debug_logger.warning(f"Failed to embed conversation {conversation.id}: {e}")
         
         # 7. Return enhanced response
         debug_logger.end_pipeline_execution(success=True)
@@ -697,7 +697,7 @@ async def enhanced_chat(
         )
         
     except Exception as e:
-        logger.error(f"Enhanced chat error: {str(e)}")
+        debug_logger.error(f"Enhanced chat error: {str(e)}")
         # Fallback to basic response
         fallback_response = "I'm here to help! Tell me about your day or ask me anything about your habits."
         
@@ -715,7 +715,7 @@ async def enhanced_chat(
         try:
             vector_store.embed_conversation(conversation)
         except Exception as e:
-            logger.warning(f"Failed to embed fallback conversation {conversation.id}: {e}")
+            debug_logger.warning(f"Failed to embed fallback conversation {conversation.id}: {e}")
         
         debug_logger.end_pipeline_execution(success=False, error=str(e))
         
@@ -830,7 +830,7 @@ def create_person(
     try:
         vector_store.embed_person(db_person)
     except Exception as e:
-        logger.warning(f"Failed to embed person {db_person.id}: {e}")
+        debug_logger.warning(f"Failed to embed person {db_person.id}: {e}")
     
     return db_person
 
