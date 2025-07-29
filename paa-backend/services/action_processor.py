@@ -22,6 +22,7 @@ from schemas import (
 )
 import database as models
 from services.time_service import time_service
+from services.habit_matcher import habit_matcher
 from debug_logger import debug_logger
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,9 @@ class ActionProcessor:
                 people_updates_count=len(response.people_updates),
                 scheduled_actions_count=len(response.scheduled_actions)
             )
+            debug_logger.info(f"🎯 Action Processor: Processing {len(response.commitments)} commitments for user {user_id}")
+            for i, commitment in enumerate(response.commitments):
+                debug_logger.info(f"  📋 Commitment {i+1}: {commitment.task_description}")
         
         # Get database session
         db = self.db_session_factory()
@@ -265,20 +269,59 @@ class ActionProcessor:
         db: Session
     ) -> Dict[str, Any]:
         """Log a habit completion"""
-        # Find the habit by name or ID
-        habit = db.query(models.Habit).filter(
-            models.Habit.user_id == user_id,
-            models.Habit.name.ilike(f"%{habit_action.habit_identifier}%"),
-            models.Habit.is_active == 1
-        ).first()
+        # First try to find exact or similar existing habit
+        habit = habit_matcher.find_similar_habit(
+            habit_action.habit_identifier, 
+            user_id, 
+            db,
+            similarity_threshold=0.7
+        )
         
+        if habit:
+            debug_logger.info(f"🔍 Found similar habit: '{habit_action.habit_identifier}' -> '{habit.name}' (ID: {habit.id})")
+        else:
+            # If no similar habit found, try the old pattern matching as fallback
+            habit = db.query(models.Habit).filter(
+                models.Habit.user_id == user_id,
+                models.Habit.name.ilike(f"%{habit_action.habit_identifier}%"),
+                models.Habit.is_active == 1
+            ).first()
+            
+            if habit:
+                debug_logger.info(f"🔍 Found habit via pattern matching: '{habit_action.habit_identifier}' -> '{habit.name}' (ID: {habit.id})")
+        
+        was_auto_created = False
         if not habit:
-            return {
-                'success': False,
-                'error': f"Habit '{habit_action.habit_identifier}' not found",
-                'user_visible': True,
-                'description': f"Could not find habit: {habit_action.habit_identifier}"
-            }
+            # Auto-create the habit if it doesn't exist
+            try:
+                # Get a clean, normalized habit name
+                suggested_name = habit_matcher.suggest_habit_name(habit_action.habit_identifier)
+                
+                debug_logger.info(f"🔧 Auto-creating missing habit: '{habit_action.habit_identifier}' -> '{suggested_name}'")
+                was_auto_created = True
+                
+                habit = models.Habit(
+                    user_id=user_id,
+                    name=suggested_name,
+                    frequency='daily',  # default frequency
+                    reminder_time=None,
+                    is_active=1,
+                    created_at=time_service.now()
+                )
+                
+                db.add(habit)
+                db.flush()  # Get the ID for logging
+                
+                debug_logger.info(f"✅ Auto-created habit: {habit.name} (ID: {habit.id})")
+                
+            except Exception as create_error:
+                debug_logger.error(f"❌ Failed to auto-create habit: {create_error}")
+                return {
+                    'success': False,
+                    'error': f"Failed to create habit '{habit_action.habit_identifier}': {str(create_error)}",
+                    'user_visible': True,
+                    'type': 'habit_creation_failed'
+                }
         
         # Check if already completed today
         completion_date = habit_action.completion_date or date.today()
@@ -312,15 +355,22 @@ class ActionProcessor:
         
         db.add(habit_log)
         
+        # Create description based on whether habit was auto-created
+        if was_auto_created:
+            description = f"Created and logged completion of new habit '{habit.name}'"
+        else:
+            description = f"Logged completion of '{habit.name}'"
+        
         return {
             'success': True,
             'type': 'habit_completed',
-            'description': f"Logged completion of '{habit.name}'",
+            'description': description,
             'data': {
                 'habit_id': habit.id,
                 'habit_name': habit.name,
                 'completion_date': completion_date.isoformat(),
-                'notes': habit_action.notes
+                'notes': habit_action.notes,
+                'was_auto_created': was_auto_created
             },
             'user_visible': True
         }

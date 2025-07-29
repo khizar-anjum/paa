@@ -32,14 +32,64 @@ class HybridLLMProcessor:
         """Build the system prompt for structured output"""
         return """You are a proactive AI assistant helping users manage their habits, commitments, and personal well-being.
 
-Your responses must be in valid JSON format matching the StructuredAIResponse schema:
+CRITICAL: Your responses must be ONLY valid JSON format matching the StructuredAIResponse schema.
+Do not include any system messages, reminders, or additional text outside the JSON.
+Do not include any explanatory text before or after the JSON.
+Start your response with { and end with }.
+
+EXACT SCHEMA FORMAT:
 {
     "message": "Your conversational response to the user",
-    "commitments": [...],  // Extracted commitments with reminders
-    "habit_actions": [...],  // Habit-related actions to take
-    "people_updates": [...],  // Updates about people mentioned
-    "scheduled_actions": [...],  // Proactive follow-ups to schedule
-    "mood_analysis": {...},  // If mood is detected
+    "commitments": [
+        {
+            "task_description": "description of the task",
+            "deadline": "2025-07-29T23:59:59",
+            "deadline_type": "specific",
+            "priority": "medium",
+            "reminder_strategy": {
+                "initial_reminder": "2025-07-29T22:00:00",
+                "follow_up_reminders": ["2025-07-29T23:30:00"],
+                "escalation": "gentle",
+                "custom_message": null
+            },
+            "related_people": [],
+            "related_habits": []
+        }
+    ],
+    "habit_actions": [
+        {
+            "action_type": "log_completion",
+            "habit_identifier": "habit name",
+            "details": {},
+            "completion_date": "2025-07-29",
+            "notes": null,
+            "new_habit_details": null
+        }
+    ],
+    "people_updates": [
+        {
+            "person_name": "Name",
+            "update_type": "add_note",
+            "content": "update content",
+            "tags": []
+        }
+    ],
+    "scheduled_actions": [
+        {
+            "message_content": "follow up message",
+            "send_time": "2025-07-30T10:00:00",
+            "trigger_type": "time_based",
+            "trigger_condition": null,
+            "expected_response_type": null
+        }
+    ],
+    "mood_analysis": {
+        "detected_mood": "neutral",
+        "confidence": 0.8,
+        "contributing_factors": [],
+        "suggested_interventions": [],
+        "should_check_in_later": false
+    },
     "response_metadata": {
         "requires_user_confirmation": false,
         "confidence_level": 0.9,
@@ -48,31 +98,21 @@ Your responses must be in valid JSON format matching the StructuredAIResponse sc
     }
 }
 
-Guidelines:
-1. Extract ALL commitments with specific or fuzzy deadlines
-2. Detect habit completions and log them appropriately
-3. Note any people mentioned for relationship tracking
-4. Analyze emotional state when expressed
-5. Schedule proactive follow-ups when appropriate
-6. Be encouraging and supportive
-7. Keep responses concise but warm
+CRITICAL INSTRUCTIONS:
+1. Use ONLY the field names shown in the schema above
+2. For commitments, use "task_description" NOT "title" or "name"
+3. For datetime fields, use ISO format: "2025-07-29T23:59:59"
+4. For date fields, use format: "2025-07-29"
+5. Include ALL required fields even if null/empty
+6. Be encouraging and supportive in the "message" field
+7. When listing existing commitments, provide them in the conversational message, NOT as new commitments
 
-For commitments:
-- Parse natural language deadlines (today, tomorrow, next week, etc.)
-- Set appropriate reminder strategies based on urgency
-- Include related people or habits when mentioned
+For information queries about existing commitments/habits:
+- Describe them in the conversational "message" field
+- Do NOT create new commitment objects for existing ones
+- Only create commitment objects for NEW commitments the user is making
 
-For habits:
-- Detect when users report completing habits
-- Suggest creating new habits when patterns emerge
-- Provide encouragement for streaks
-
-For mood:
-- Detect emotional indicators in the message
-- Suggest appropriate interventions
-- Schedule check-ins if concerning mood detected
-
-Always respond with valid JSON matching the schema."""
+Always respond with valid JSON matching the EXACT schema above."""
     
     def process_message(
         self,
@@ -126,37 +166,61 @@ Always respond with valid JSON matching the schema."""
             # Parse the response
             response_text = response.content[0].text
             
+            # Clean up any system reminder tags that might have been injected
+            import re
+            response_text = re.sub(r'<system-reminder>.*?</system-reminder>', '', response_text, flags=re.DOTALL)
+            response_text = response_text.strip()
+            
             # Debug logging - show raw LLM response
             if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
                 debug_logger.debug(f"🤖 Raw LLM Response: {response_text[:1000]}{'...' if len(response_text) > 1000 else ''}")
+                debug_logger.debug(f"🔍 Response starts with: {response_text[:100]}")
+                debug_logger.debug(f"🔍 Response contains JSON-like content: {'{' in response_text and '}' in response_text}")
+                debug_logger.debug(f"🔍 Response is valid JSON: {self._is_valid_json(response_text)}")
             
             # Estimate tokens (rough approximation)
             tokens_estimate = len(prompt.split()) + len(response_text.split())
             
             # Try to parse as JSON
             try:
+                # First try direct JSON parsing
                 response_data = json.loads(response_text)
-                
-                # Check if response_data is a dictionary (structured response)
-                if not isinstance(response_data, dict):
-                    logger.warning(f"API returned non-dict JSON: {type(response_data)}")
-                    return self._create_fallback_response(message, response_text)
-                
-                structured_response = self._parse_structured_response(response_data)
-                
-                # Debug logging - success
-                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
-                    debug_logger.log_llm_call_result(
-                        prompt_length=len(prompt),
-                        response_length=len(response_text),
-                        api_call_time=api_call_time,
-                        tokens_used=tokens_estimate,
-                        structured_output=structured_response.dict()
-                    )
-                
-                return structured_response
-                
             except json.JSONDecodeError:
+                # If that fails, try to extract JSON from markdown code blocks
+                json_match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', response_text, re.DOTALL)
+                if json_match:
+                    try:
+                        response_data = json.loads(json_match.group(1))
+                    except json.JSONDecodeError:
+                        raise
+                else:
+                    raise
+            
+            # Check if response_data is a dictionary (structured response)
+            if not isinstance(response_data, dict):
+                logger.warning(f"API returned non-dict JSON: {type(response_data)}")
+                return self._create_fallback_response(message, response_text)
+            
+            try:
+                structured_response = self._parse_structured_response(response_data)
+            except Exception as schema_error:
+                logger.error(f"Schema parsing failed: {schema_error}")
+                logger.debug(f"Raw response data: {json.dumps(response_data, indent=2)}")
+                return self._create_fallback_response(message, response_text)
+            
+            # Debug logging - success
+            if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                debug_logger.log_llm_call_result(
+                    prompt_length=len(prompt),
+                    response_length=len(response_text),
+                    api_call_time=api_call_time,
+                    tokens_used=tokens_estimate,
+                    structured_output=structured_response.dict()
+                )
+            
+            return structured_response
+                
+        except json.JSONDecodeError:
                 logger.error(f"Failed to parse LLM response as JSON: {response_text}")
                 
                 # Debug logging - JSON parse error
@@ -295,13 +359,26 @@ Always respond with valid JSON matching the schema."""
         # Parse commitments
         commitments = []
         commitments_data = response_data.get('commitments', [])
+        
+        # Debug logging for commitment data
+        if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+            debug_logger.debug(f"🔍 Raw commitments_data: {commitments_data}")
+            debug_logger.debug(f"🔍 commitments_data type: {type(commitments_data)}")
+            debug_logger.debug(f"🔍 commitments_data length: {len(commitments_data) if isinstance(commitments_data, list) else 'N/A'}")
+            
         if not isinstance(commitments_data, list):
             logger.warning(f"Expected list for commitments, got {type(commitments_data)}")
             commitments_data = []
             
         for commit_data in commitments_data:
             if not isinstance(commit_data, dict):
+                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                    debug_logger.debug(f"🔍 Skipping non-dict commitment: {commit_data}")
                 continue
+                
+            # Debug each commitment being processed
+            if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                debug_logger.debug(f"🔍 Processing commitment: {commit_data.get('task_description', 'NO_TASK')}")
                 
             # Parse deadline
             deadline = None
@@ -355,16 +432,52 @@ Always respond with valid JSON matching the schema."""
                 custom_message=custom_message
             )
             
-            commitment = ExtractedCommitment(
-                task_description=commit_data.get('task_description', ''),
-                deadline=deadline,
-                deadline_type=commit_data.get('deadline_type', 'fuzzy'),
-                priority=commit_data.get('priority', 'medium'),
-                reminder_strategy=reminder_strategy,
-                related_people=commit_data.get('related_people', []),
-                related_habits=commit_data.get('related_habits', [])
-            )
-            commitments.append(commitment)
+            # Normalize deadline_type to valid values
+            raw_deadline_type = commit_data.get('deadline_type', 'fuzzy')
+            if raw_deadline_type not in ['specific', 'fuzzy', 'recurring']:
+                # Map common invalid values to valid ones
+                if raw_deadline_type in ['generic', 'flexible']:
+                    deadline_type = 'fuzzy'
+                elif raw_deadline_type in ['exact', 'fixed']:
+                    deadline_type = 'specific'
+                else:
+                    deadline_type = 'fuzzy'  # default fallback
+                    
+                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                    debug_logger.debug(f"🔍 Mapped invalid deadline_type '{raw_deadline_type}' to '{deadline_type}'")
+            else:
+                deadline_type = raw_deadline_type
+            
+            # Normalize priority to valid values
+            raw_priority = commit_data.get('priority', 'medium')
+            if raw_priority not in ['high', 'medium', 'low']:
+                priority = 'medium'  # default fallback
+                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                    debug_logger.debug(f"🔍 Mapped invalid priority '{raw_priority}' to '{priority}'")
+            else:
+                priority = raw_priority
+
+            try:
+                commitment = ExtractedCommitment(
+                    task_description=commit_data.get('task_description', ''),
+                    deadline=deadline,
+                    deadline_type=deadline_type,
+                    priority=priority,
+                    reminder_strategy=reminder_strategy,
+                    related_people=commit_data.get('related_people', []),
+                    related_habits=commit_data.get('related_habits', [])
+                )
+                commitments.append(commitment)
+                
+                # Debug the created commitment
+                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                    debug_logger.debug(f"🔍 Created commitment: {commitment.task_description} (deadline: {commitment.deadline})")
+                    
+            except Exception as commitment_error:
+                logger.error(f"Error creating commitment from data {commit_data}: {commitment_error}")
+                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                    debug_logger.debug(f"🔍 Failed to create commitment: {commitment_error}")
+                continue  # Skip this commitment but continue with others
         
         # Parse habit actions
         habit_actions = []
@@ -462,7 +575,7 @@ Always respond with valid JSON matching the schema."""
             context_used=metadata_data.get('context_used', [])
         )
         
-        return StructuredAIResponse(
+        final_response = StructuredAIResponse(
             message=response_data.get('message', 'I understand. Let me help you with that.'),
             commitments=commitments,
             habit_actions=habit_actions,
@@ -471,6 +584,12 @@ Always respond with valid JSON matching the schema."""
             mood_analysis=mood_analysis,
             response_metadata=metadata
         )
+        
+        # Final debug logging
+        if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+            debug_logger.debug(f"🔍 Final StructuredAIResponse: {len(commitments)} commitments, {len(habit_actions)} habits")
+            
+        return final_response
     
     def _parse_fuzzy_deadline(self, deadline_str: str) -> Optional[datetime]:
         """Parse fuzzy deadline strings"""
@@ -533,10 +652,22 @@ Always respond with valid JSON matching the schema."""
     
     def _create_fallback_response(self, message: str, raw_response: str) -> StructuredAIResponse:
         """Create a fallback response when JSON parsing fails"""
-        # Extract the conversational part if possible
-        conversational_response = raw_response
-        if len(raw_response) > 500:
-            conversational_response = raw_response[:500] + "..."
+        # Clean the response of any system reminder tags
+        import re
+        conversational_response = re.sub(r'<system-reminder>.*?</system-reminder>', '', raw_response, flags=re.DOTALL)
+        conversational_response = conversational_response.strip()
+        
+        # Try to extract just the message part if it looks like JSON
+        json_like_match = re.search(r'"message"\s*:\s*"([^"]*)"', conversational_response)
+        if json_like_match:
+            conversational_response = json_like_match.group(1)
+        elif conversational_response.startswith('{') and 'message' in conversational_response:
+            # If it looks like JSON but we couldn't extract the message, provide a helpful default
+            conversational_response = "I understand. Let me help you with that."
+        
+        # If after cleaning it's empty, provide a default response
+        if not conversational_response:
+            conversational_response = "I understand. Let me help you with that."
         
         return StructuredAIResponse(
             message=conversational_response,
@@ -667,6 +798,14 @@ Always respond with valid JSON matching the schema."""
             response.message = "I'm here to help! Feel free to tell me about your habits, commitments, or how you're feeling."
         
         return response
+    
+    def _is_valid_json(self, text: str) -> bool:
+        """Check if text is valid JSON"""
+        try:
+            json.loads(text)
+            return True
+        except:
+            return False
 
 
 # Global instance for easy importing

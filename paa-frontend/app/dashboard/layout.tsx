@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
-import { Brain, Home, Target, MessageSquare, BarChart3, Users, User, LogOut, Loader2 } from 'lucide-react';
+import { Brain, Home, Target, MessageSquare, BarChart3, Users, User, LogOut, Loader2, CheckSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect } from 'react';
 import { PersistentChatPanel } from '@/app/components/PersistentChatPanel';
@@ -38,6 +38,7 @@ export default function DashboardLayout({
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Your Profile', href: '/dashboard/profile', icon: User },
     { name: 'Habits', href: '/dashboard/habits', icon: Target },
+    { name: 'Commitments', href: '/dashboard/commitments', icon: CheckSquare },
     { name: 'People', href: '/dashboard/people', icon: Users },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];

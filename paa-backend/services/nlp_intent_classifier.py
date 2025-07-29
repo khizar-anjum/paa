@@ -385,17 +385,17 @@ class NLPIntentClassifier:
         # High urgency indicators
         urgent_words = ['urgent', 'asap', 'immediately', 'emergency', 'help', 'crisis']
         if any(word in text for word in urgent_words):
-            return 'high'
+            return 'immediate'
         
         # Time-based urgency
         if any(phrase in text for phrase in ['today', 'now', 'right now', 'this morning']):
-            return 'medium'
+            return 'normal'
         
         # Mood-based urgency
         if primary_intent == 'mood_reflection':
             negative_emotions = ['stressed', 'anxious', 'overwhelmed', 'panic', 'crisis']
             if any(emotion in text for emotion in negative_emotions):
-                return 'medium'
+                return 'normal'
         
         return 'low'
 

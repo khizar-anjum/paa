@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta, date
 from sqlalchemy import func, and_, cast, Date
 from collections import defaultdict
@@ -664,6 +664,9 @@ async def enhanced_chat(
             user_data
         )
         
+        # Debug: Log the structured response
+        debug_logger.info(f"📊 Structured AI Response: message='{ai_response.message[:100]}...', commitments={len(ai_response.commitments)}, habits={len(ai_response.habit_actions)}")
+        
         # 4. Action Processing
         processing_result = await action_processor.process_response(
             ai_response,
@@ -949,13 +952,47 @@ def update_user_profile(
 # Commitment management endpoints
 @app.get("/commitments", response_model=List[schemas.Commitment])
 def get_commitments(
+    status: Optional[str] = None,
+    overdue: Optional[bool] = None,
+    sort_by: Optional[str] = "created_at",
+    order: Optional[str] = "desc",
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    commitments = db.query(models.Commitment).filter(
+    query = db.query(models.Commitment).filter(
         models.Commitment.user_id == current_user.id
-    ).order_by(models.Commitment.created_at.desc()).all()
-    return commitments
+    )
+    
+    # Filter by status
+    if status:
+        query = query.filter(models.Commitment.status == status)
+    
+    # Filter by overdue status
+    if overdue is not None:
+        today = date.today()
+        if overdue:
+            query = query.filter(
+                models.Commitment.deadline < today,
+                models.Commitment.status == "pending"
+            )
+        else:
+            query = query.filter(
+                models.Commitment.deadline >= today
+            )
+    
+    # Sorting
+    if sort_by == "deadline":
+        if order == "asc":
+            query = query.order_by(models.Commitment.deadline.asc())
+        else:
+            query = query.order_by(models.Commitment.deadline.desc())
+    elif sort_by == "created_at":
+        if order == "asc":
+            query = query.order_by(models.Commitment.created_at.asc())
+        else:
+            query = query.order_by(models.Commitment.created_at.desc())
+    
+    return query.all()
 
 @app.post("/commitments/{commitment_id}/complete")
 def complete_commitment(
@@ -1011,6 +1048,69 @@ def postpone_commitment(
     commitment.reminder_count = 0  # Reset reminder count
     db.commit()
     return {"message": "Commitment postponed"}
+
+@app.put("/commitments/{commitment_id}", response_model=schemas.Commitment)
+def update_commitment(
+    commitment_id: int,
+    commitment_update: schemas.CommitmentUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    # Update fields if provided
+    if commitment_update.status:
+        commitment.status = commitment_update.status
+    if commitment_update.deadline:
+        commitment.deadline = commitment_update.deadline
+    
+    db.commit()
+    db.refresh(commitment)
+    return commitment
+
+@app.delete("/commitments/{commitment_id}")
+def delete_commitment(
+    commitment_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    db.delete(commitment)
+    db.commit()
+    return {"message": "Commitment deleted"}
+
+@app.get("/commitments/{commitment_id}/reminders", response_model=List[schemas.ProactiveMessage])
+def get_commitment_reminders(
+    commitment_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # First verify the commitment belongs to the user
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    # Get all proactive messages related to this commitment
+    reminders = db.query(models.ProactiveMessage).filter(
+        models.ProactiveMessage.related_commitment_id == commitment_id,
+        models.ProactiveMessage.user_id == current_user.id
+    ).order_by(models.ProactiveMessage.sent_at.desc()).all()
+    
+    return reminders
 
 # Proactive message endpoints
 @app.get("/proactive-messages", response_model=List[schemas.ProactiveMessage])
