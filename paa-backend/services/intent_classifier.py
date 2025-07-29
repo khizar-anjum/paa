@@ -4,8 +4,10 @@ Analyzes user messages to determine intent and extract entities.
 """
 
 import re
+import os
 from typing import Dict, List, Optional
 from schemas.ai_responses import MessageIntent
+from debug_logger import debug_logger
 
 
 class IntentClassifier:
@@ -102,7 +104,7 @@ class IntentClassifier:
         # Calculate confidence
         confidence = self._calculate_confidence(message_lower, primary_intent)
         
-        return MessageIntent(
+        result = MessageIntent(
             primary_intent=primary_intent,
             secondary_intents=secondary_intents,
             entities=entities,
@@ -110,6 +112,22 @@ class IntentClassifier:
             urgency=urgency,
             confidence=confidence
         )
+        
+        # Debug logging
+        if os.getenv("DEBUG_INTENT_CLASSIFICATION", "false").lower() == "true":
+            debug_logger.log_intent_classification(
+                message=message,
+                intent_result={
+                    "primary_intent": primary_intent,
+                    "secondary_intents": secondary_intents,
+                    "confidence": confidence,
+                    "entities": entities,
+                    "context_needed": context_needed,
+                    "urgency": urgency
+                }
+            )
+        
+        return result
     
     def _determine_primary_intent(self, message: str) -> str:
         """Determine the primary intent of the message."""

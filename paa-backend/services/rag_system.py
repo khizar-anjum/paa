@@ -3,6 +3,8 @@ Hybrid RAG System for Hybrid Pipeline Architecture
 Combines semantic search with SQL queries for comprehensive context retrieval.
 """
 
+import os
+import time
 from typing import Dict, List, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -12,6 +14,7 @@ from schemas.ai_responses import MessageIntent, EnhancedContext
 import database as models
 from services.time_service import time_service
 from services.vector_store import get_vector_store
+from debug_logger import debug_logger
 
 
 class HybridRAGSystem:
@@ -41,8 +44,16 @@ class HybridRAGSystem:
         Returns:
             EnhancedContext with relevant information
         """
+        start_time = time.time()
+        
+        # Debug logging - start
+        if os.getenv("DEBUG_RAG_SYSTEM", "false").lower() == "true":
+            debug_logger.log_rag_retrieval_start(intent, user_id)
+        
         db = self.db_session_factory()
         context = EnhancedContext()
+        context_sources = []
+        retrieved_items = 0
         
         try:
             # 1. Semantic search across relevant collections (NEW)
@@ -51,31 +62,59 @@ class HybridRAGSystem:
             # 2. Recent conversations (ENHANCED with semantic search)
             if 'recent_conversations' in intent.context_needed:
                 context.conversations = self._get_enhanced_conversations(db, user_id, message)
+                context_sources.append("conversations")
+                retrieved_items += len(context.conversations)
             
             # 3. Person profiles (ENHANCED with semantic search)
             if 'person_profile' in intent.context_needed and intent.entities.get('people'):
                 context.people_context = self._get_enhanced_people_context(db, user_id, intent.entities['people'], message)
+                context_sources.append("people")
+                retrieved_items += len(context.people_context)
             
             # 4. Habit context (ENHANCED with semantic search)
             if ('habit_history' in intent.context_needed or 
                 intent.primary_intent == 'habit_tracking' or 
                 intent.entities.get('habits')):
                 context.habit_context = self._get_enhanced_habit_context(db, user_id, intent.entities.get('habits', []), message)
+                context_sources.append("habits")
+                retrieved_items += len(context.habit_context)
             
             # 5. Mood trends (existing)
             if 'mood_trends' in intent.context_needed or intent.primary_intent == 'mood_reflection':
                 context.mood_patterns = self._get_mood_patterns(db, user_id)
+                context_sources.append("mood_patterns")
+                retrieved_items += len(context.mood_patterns)
             
             # 6. Similar commitments (ENHANCED with semantic search)
             if 'similar_commitments' in intent.context_needed or intent.primary_intent == 'commitment_making':
                 context.similar_commitments = self._get_enhanced_similar_commitments(db, user_id, message)
+                context_sources.append("commitments")
+                retrieved_items += len(context.similar_commitments)
             
             # 7. Temporal context (existing)
             if 'temporal_context' in intent.context_needed and intent.entities.get('time_references'):
                 context.temporal = self._get_temporal_context(db, user_id, intent.entities['time_references'])
+                context_sources.append("temporal")
+                retrieved_items += len(context.temporal)
         
         finally:
             db.close()
+        
+        # Debug logging - result
+        if os.getenv("DEBUG_RAG_SYSTEM", "false").lower() == "true":
+            processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+            similarity_scores = []
+            
+            # Extract similarity scores from semantic matches
+            if hasattr(context, 'semantic_matches') and context.semantic_matches:
+                similarity_scores = [match.get('similarity_score', 0) for match in context.semantic_matches]
+            
+            debug_logger.log_rag_retrieval_result(
+                context_sources=context_sources,
+                similarity_scores=similarity_scores,
+                retrieved_items=retrieved_items,
+                processing_time=processing_time
+            )
         
         return context
     

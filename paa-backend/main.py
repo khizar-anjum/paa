@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from sqlalchemy import func, and_, cast, Date
 from collections import defaultdict
 import os
 import logging
+import time
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base, SessionLocal
@@ -26,6 +27,7 @@ from services.llm_processor import llm_processor
 from services.rag_system import create_rag_system
 from services.action_processor import create_action_processor
 from services.vector_store import get_vector_store
+from debug_logger import debug_logger
 import atexit
 
 load_dotenv()
@@ -34,6 +36,41 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Personal AI Assistant API")
+
+# Debug middleware for HTTP request/response logging
+@app.middleware("http")
+async def debug_middleware(request: Request, call_next):
+    if debug_logger.debug_mode and os.getenv("DEBUG_HTTP_REQUESTS", "false").lower() == "true":
+        start_time = time.time()
+        
+        # Log request
+        body = await request.body()
+        debug_logger.log_http_request(
+            method=request.method,
+            path=str(request.url.path),
+            headers=dict(request.headers),
+            body=body.decode() if body else None
+        )
+        
+        # Process request (need to recreate request with body for downstream)
+        from fastapi import Request as FastAPIRequest
+        async def receive():
+            return {"type": "http.request", "body": body}
+        
+        request = FastAPIRequest(request.scope, receive)
+        response = await call_next(request)
+        
+        # Log response
+        process_time = time.time() - start_time
+        debug_logger.log_http_response(
+            status_code=response.status_code,
+            process_time=process_time,
+            headers=dict(response.headers)
+        )
+    else:
+        response = await call_next(request)
+    
+    return response
 
 # CORS configuration
 app.add_middleware(
@@ -597,6 +634,9 @@ async def enhanced_chat(
     3. LLM Processing with Structured Output
     4. Action Processing
     """
+    # Start pipeline execution tracking
+    execution_id = debug_logger.start_pipeline_execution(current_user.id, message.message)
+    
     try:
         # 1. Intent Classification
         intent = intent_classifier.classify(message.message)
@@ -648,6 +688,8 @@ async def enhanced_chat(
             logger.warning(f"Failed to embed conversation {conversation.id}: {e}")
         
         # 7. Return enhanced response
+        debug_logger.end_pipeline_execution(success=True)
+        
         return schemas.ChatResponse(
             message=message.message,
             response=ai_response.message,
@@ -674,6 +716,8 @@ async def enhanced_chat(
             vector_store.embed_conversation(conversation)
         except Exception as e:
             logger.warning(f"Failed to embed fallback conversation {conversation.id}: {e}")
+        
+        debug_logger.end_pipeline_execution(success=False, error=str(e))
         
         return schemas.ChatResponse(
             message=message.message,
@@ -1294,6 +1338,104 @@ def get_time_status(current_user: models.User = Depends(get_current_user)):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error getting time status: {str(e)}")
+
+# Additional Debug Endpoints
+@app.get("/debug/status")
+def get_debug_status(current_user: models.User = Depends(get_current_user)):
+    """Get current debug configuration status"""
+    return debug_logger.get_debug_status()
+
+@app.get("/debug/pipeline/recent-executions")
+def get_recent_pipeline_executions(current_user: models.User = Depends(get_current_user)):
+    """Get recent pipeline execution details"""
+    return {
+        "success": True,
+        "recent_executions": debug_logger.get_recent_executions()
+    }
+
+@app.get("/debug/vector-store/stats")
+def get_vector_store_stats(current_user: models.User = Depends(get_current_user)):
+    """Get vector store collection statistics"""
+    try:
+        # Get collection counts
+        stats = {
+            "collections": {
+                "conversations": 0,
+                "habits": 0,
+                "people": 0,
+                "commitments": 0
+            },
+            "status": "healthy"
+        }
+        
+        try:
+            # Get collection counts from ChromaDB
+            conv_count = vector_store.conversations_collection.count()
+            habits_count = vector_store.habits_collection.count()
+            people_count = vector_store.people_collection.count()
+            commitments_count = vector_store.commitments_collection.count()
+            
+            stats["collections"] = {
+                "conversations": conv_count,
+                "habits": habits_count,
+                "people": people_count,
+                "commitments": commitments_count
+            }
+            stats["total_documents"] = conv_count + habits_count + people_count + commitments_count
+            
+        except Exception as e:
+            stats["status"] = "error"
+            stats["error"] = str(e)
+        
+        return {
+            "success": True,
+            "vector_store_stats": stats
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/debug/pipeline/last-execution")
+def get_last_pipeline_execution(current_user: models.User = Depends(get_current_user)):
+    """Get detailed info about the last pipeline execution"""
+    try:
+        recent_executions = debug_logger.get_recent_executions()
+        if not recent_executions:
+            return {
+                "success": True,
+                "last_execution": None,
+                "message": "No recent pipeline executions found"
+            }
+        
+        return {
+            "success": True,
+            "last_execution": recent_executions[0]  # Most recent execution
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/debug/clear-logs")
+def clear_debug_logs(current_user: models.User = Depends(get_current_user)):
+    """Clear recent pipeline execution logs"""
+    try:
+        # Clear recent executions
+        debug_logger.recent_executions = []
+        
+        return {
+            "success": True,
+            "message": "Debug logs cleared successfully"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     import uvicorn

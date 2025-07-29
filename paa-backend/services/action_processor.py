@@ -5,6 +5,7 @@ Executes all structured actions from LLM responses.
 
 import asyncio
 import logging
+import os
 from datetime import datetime, date
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from schemas import (
 )
 import database as models
 from services.time_service import time_service
+from debug_logger import debug_logger
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +50,20 @@ class ActionProcessor:
         """
         results = ProcessingResult()
         
+        # Debug logging - start
+        if os.getenv("DEBUG_ACTION_PROCESSOR", "false").lower() == "true":
+            debug_logger.log_action_processing_start(
+                commitments_count=len(response.commitments),
+                habit_actions_count=len(response.habit_actions),
+                people_updates_count=len(response.people_updates),
+                scheduled_actions_count=len(response.scheduled_actions)
+            )
+        
         # Get database session
         db = self.db_session_factory()
+        executed_actions = {"commitments": 0, "habit_actions": 0, "people_updates": 0, "scheduled_actions": 0}
+        failed_actions = {"commitments": 0, "habit_actions": 0, "people_updates": 0, "scheduled_actions": 0}
+        database_changes = {}
         
         try:
             # Process in parallel where possible
@@ -76,6 +90,27 @@ class ActionProcessor:
                 try:
                     result = await task
                     results.outcomes.append(result)
+                    
+                    # Track successful actions for debug logging
+                    action_type = result.get('action_type', 'unknown')
+                    if result.get('success', False):
+                        if action_type in executed_actions:
+                            executed_actions[action_type] += 1
+                        else:
+                            executed_actions[action_type] = 1
+                        
+                        # Track database changes
+                        db_action = result.get('db_action', 'unknown')
+                        if db_action in database_changes:
+                            database_changes[db_action] += 1
+                        else:
+                            database_changes[db_action] = 1
+                    else:
+                        if action_type in failed_actions:
+                            failed_actions[action_type] += 1
+                        else:
+                            failed_actions[action_type] = 1
+                            
                 except Exception as e:
                     error_msg = f"Error processing action: {str(e)}"
                     logger.error(error_msg)
@@ -85,16 +120,25 @@ class ActionProcessor:
                         'error': error_msg,
                         'user_visible': False
                     })
+                    failed_actions['unknown'] = failed_actions.get('unknown', 0) + 1
             
             # 5. Schedule proactive messages (separate transaction)
             for scheduled in response.scheduled_actions:
                 try:
                     result = await self._schedule_action(scheduled, user_id, db)
                     results.outcomes.append(result)
+                    
+                    if result.get('success', False):
+                        executed_actions['scheduled_actions'] += 1
+                        database_changes['scheduled_messages'] = database_changes.get('scheduled_messages', 0) + 1
+                    else:
+                        failed_actions['scheduled_actions'] += 1
+                        
                 except Exception as e:
                     error_msg = f"Error scheduling action: {str(e)}"
                     logger.error(error_msg)
                     results.errors.append(error_msg)
+                    failed_actions['scheduled_actions'] += 1
             
             # Commit all changes
             db.commit()
@@ -105,6 +149,14 @@ class ActionProcessor:
             results.errors.append(f"Transaction error: {str(e)}")
         finally:
             db.close()
+        
+        # Debug logging - result
+        if os.getenv("DEBUG_ACTION_PROCESSOR", "false").lower() == "true":
+            debug_logger.log_action_processing_result(
+                executed_actions=executed_actions,
+                failed_actions=failed_actions,
+                database_changes=database_changes
+            )
         
         return results
     

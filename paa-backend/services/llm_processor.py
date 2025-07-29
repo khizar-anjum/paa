@@ -5,6 +5,8 @@ Handles structured prompt engineering and response parsing.
 
 import json
 import logging
+import os
+import time
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from anthropic import Anthropic
@@ -14,6 +16,7 @@ from schemas.ai_responses import (
     EnhancedContext, ScheduledAction, PersonUpdate as AIPersonUpdate
 )
 from services.time_service import time_service
+from debug_logger import debug_logger
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,18 @@ Always respond with valid JSON matching the schema."""
         Returns:
             StructuredAIResponse with all extracted information
         """
+        start_time = time.time()
+        
+        # Debug logging - start
+        if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+            context_summary = {
+                "conversations": len(context.conversations) if hasattr(context, 'conversations') and context.conversations else 0,
+                "habits": len(context.habit_context) if hasattr(context, 'habit_context') and context.habit_context else 0,
+                "people": len(context.people_context) if hasattr(context, 'people_context') and context.people_context else 0,
+                "semantic_matches": len(context.semantic_matches) if hasattr(context, 'semantic_matches') and context.semantic_matches else 0
+            }
+            debug_logger.log_llm_call_start(message, context_summary, intent.primary_intent)
+        
         # Build the prompt
         prompt = self._build_structured_prompt(message, intent, context, user_data)
         
@@ -99,27 +114,67 @@ Always respond with valid JSON matching the schema."""
         
         try:
             # Call Anthropic API
+            api_start_time = time.time()
             response = self.anthropic_client.messages.create(
                 model="claude-3-haiku-20240307",
                 max_tokens=1000,
                 system=self.system_prompt,
                 messages=[{"role": "user", "content": prompt}]
             )
+            api_call_time = (time.time() - api_start_time) * 1000  # Convert to milliseconds
             
             # Parse the response
             response_text = response.content[0].text
             
+            # Estimate tokens (rough approximation)
+            tokens_estimate = len(prompt.split()) + len(response_text.split())
+            
             # Try to parse as JSON
             try:
                 response_data = json.loads(response_text)
-                return self._parse_structured_response(response_data)
+                structured_response = self._parse_structured_response(response_data)
+                
+                # Debug logging - success
+                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                    debug_logger.log_llm_call_result(
+                        prompt_length=len(prompt),
+                        response_length=len(response_text),
+                        api_call_time=api_call_time,
+                        tokens_used=tokens_estimate,
+                        structured_output=structured_response.dict()
+                    )
+                
+                return structured_response
+                
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse LLM response as JSON: {response_text}")
+                
+                # Debug logging - JSON parse error
+                if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                    debug_logger.log_llm_call_result(
+                        prompt_length=len(prompt),
+                        response_length=len(response_text),
+                        api_call_time=api_call_time,
+                        tokens_used=tokens_estimate,
+                        structured_output={"error": "JSON parse failed", "raw_response": response_text[:200]}
+                    )
+                
                 # Return a fallback response
                 return self._create_fallback_response(message, response_text)
                 
         except Exception as e:
             logger.error(f"Error calling Anthropic API: {e}")
+            
+            # Debug logging - API error
+            if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                debug_logger.log_llm_call_result(
+                    prompt_length=len(prompt),
+                    response_length=0,
+                    api_call_time=(time.time() - start_time) * 1000,
+                    tokens_used=0,
+                    structured_output={"error": str(e)}
+                )
+            
             return self._generate_demo_response(message, intent, context)
     
     def _build_structured_prompt(

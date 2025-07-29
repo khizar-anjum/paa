@@ -5,6 +5,7 @@ Handles embedding and retrieval of conversations, habits, people, and commitment
 
 import os
 import uuid
+import time
 from typing import Dict, List, Any, Optional
 import chromadb
 from chromadb.config import Settings
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
 import database as models
+from debug_logger import debug_logger
 
 
 class VectorStore:
@@ -46,6 +48,8 @@ class VectorStore:
     
     def embed_conversation(self, conversation: models.Conversation):
         """Add a conversation to the vector store"""
+        start_time = time.time()
+        
         try:
             # Create combined text for embedding
             combined_text = f"User: {conversation.message}\nAI: {conversation.response}"
@@ -61,7 +65,15 @@ class VectorStore:
                 }],
                 ids=[f"conv_{conversation.id}"]
             )
+            
+            embedding_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+            if os.getenv("DEBUG_VECTOR_STORE", "false").lower() == "true":
+                debug_logger.log_vector_embedding("conversations", f"conv_{conversation.id}", embedding_time, True)
+                
         except Exception as e:
+            embedding_time = (time.time() - start_time) * 1000
+            if os.getenv("DEBUG_VECTOR_STORE", "false").lower() == "true":
+                debug_logger.log_vector_embedding("conversations", f"conv_{conversation.id}", embedding_time, False)
             print(f"Error embedding conversation {conversation.id}: {e}")
     
     def embed_habit(self, habit: models.Habit, db: Session):
@@ -161,6 +173,11 @@ class VectorStore:
         limit: int = 5
     ) -> List[Dict[str, Any]]:
         """Search for similar conversations"""
+        start_time = time.time()
+        
+        if os.getenv("DEBUG_VECTOR_STORE", "false").lower() == "true":
+            debug_logger.log_vector_search_start("conversations", query, user_id, limit)
+        
         try:
             results = self.conversations_collection.query(
                 query_texts=[query],
@@ -169,22 +186,35 @@ class VectorStore:
             )
             
             if not results['documents'] or not results['documents'][0]:
+                search_time = (time.time() - start_time) * 1000
+                if os.getenv("DEBUG_VECTOR_STORE", "false").lower() == "true":
+                    debug_logger.log_vector_search_result(0, [], search_time)
                 return []
             
             formatted_results = []
+            similarity_scores = []
             for i in range(len(results['documents'][0])):
                 metadata = results['metadatas'][0][i]
+                similarity_score = 1 - results['distances'][0][i]  # Convert distance to similarity
+                similarity_scores.append(similarity_score)
                 formatted_results.append({
                     'content': results['documents'][0][i],
-                    'similarity_score': 1 - results['distances'][0][i],  # Convert distance to similarity
+                    'similarity_score': similarity_score,
                     'conversation_id': metadata['conversation_id'],
                     'timestamp': metadata['timestamp'],
                     'user_message': metadata['user_message'],
                     'ai_response': metadata['ai_response']
                 })
             
+            search_time = (time.time() - start_time) * 1000
+            if os.getenv("DEBUG_VECTOR_STORE", "false").lower() == "true":
+                debug_logger.log_vector_search_result(len(formatted_results), similarity_scores, search_time)
+            
             return formatted_results
         except Exception as e:
+            search_time = (time.time() - start_time) * 1000
+            if os.getenv("DEBUG_VECTOR_STORE", "false").lower() == "true":
+                debug_logger.log_vector_search_result(0, [], search_time)
             print(f"Error searching conversations: {e}")
             return []
     
