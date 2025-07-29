@@ -7,9 +7,10 @@ from datetime import datetime, timedelta, date
 from sqlalchemy import func, and_, cast, Date
 from collections import defaultdict
 import os
+import logging
 from dotenv import load_dotenv
 
-from database import get_db, engine, Base
+from database import get_db, engine, Base, SessionLocal
 from auth import (
     authenticate_user, create_access_token, get_current_user, 
     get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
@@ -20,6 +21,11 @@ from anthropic import Anthropic
 from scheduler import start_scheduler, stop_scheduler, initialize_default_prompts_for_user_sync
 from services.commitment_parser import commitment_parser
 from services.time_service import time_service
+from services.intent_classifier import intent_classifier
+from services.llm_processor import llm_processor
+from services.rag_system import create_rag_system
+from services.action_processor import create_action_processor
+from services.vector_store import get_vector_store
 import atexit
 
 load_dotenv()
@@ -40,6 +46,12 @@ app.add_middleware(
 
 # Initialize Anthropic client
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+
+# Initialize hybrid pipeline services
+rag_system = create_rag_system(lambda: SessionLocal())
+action_processor = create_action_processor(lambda: SessionLocal())
+vector_store = get_vector_store()
+llm_processor.anthropic_client = anthropic_client
 
 # We'll initialize the scheduler on FastAPI startup instead of at import time
 # Register cleanup function for graceful shutdown
@@ -167,6 +179,13 @@ def create_habit(
     db.add(db_habit)
     db.commit()
     db.refresh(db_habit)
+    
+    # Embed the new habit for semantic search
+    try:
+        vector_store.embed_habit(db_habit, db)
+    except Exception as e:
+        logger.warning(f"Failed to embed habit {db_habit.id}: {e}")
+    
     return db_habit
 
 # Add habit completion endpoint
@@ -564,6 +583,104 @@ Guidelines:
             timestamp=conversation.timestamp
         )
 
+# Enhanced Chat endpoint with Hybrid Pipeline Architecture
+@app.post("/chat/enhanced", response_model=schemas.ChatResponse)
+async def enhanced_chat(
+    message: schemas.ChatMessage,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Enhanced chat endpoint using the Hybrid Pipeline Architecture:
+    1. Intent Classification
+    2. RAG Context Retrieval  
+    3. LLM Processing with Structured Output
+    4. Action Processing
+    """
+    try:
+        # 1. Intent Classification
+        intent = intent_classifier.classify(message.message)
+        
+        # 2. RAG Context Retrieval
+        context = rag_system.retrieve_context(message.message, intent, current_user.id)
+        
+        # Get user profile if available
+        user_data = {}
+        user_profile = db.query(models.UserProfile).filter(
+            models.UserProfile.user_id == current_user.id
+        ).first()
+        if user_profile:
+            user_data['profile'] = {
+                'name': user_profile.name,
+                'pronouns': user_profile.pronouns,
+                'description': user_profile.description
+            }
+        
+        # 3. LLM Processing with Structured Output
+        ai_response = llm_processor.process_message(
+            message.message,
+            intent,
+            context,
+            user_data
+        )
+        
+        # 4. Action Processing
+        processing_result = await action_processor.process_response(
+            ai_response,
+            current_user.id
+        )
+        
+        # 5. Store conversation with metadata
+        conversation = models.Conversation(
+            user_id=current_user.id,
+            message=message.message,
+            response=ai_response.message,
+            timestamp=time_service.now()
+        )
+        db.add(conversation)
+        db.commit()
+        db.refresh(conversation)
+        
+        # 6. Embed the conversation for future semantic search
+        try:
+            vector_store.embed_conversation(conversation)
+        except Exception as e:
+            logger.warning(f"Failed to embed conversation {conversation.id}: {e}")
+        
+        # 7. Return enhanced response
+        return schemas.ChatResponse(
+            message=message.message,
+            response=ai_response.message,
+            timestamp=conversation.timestamp
+        )
+        
+    except Exception as e:
+        logger.error(f"Enhanced chat error: {str(e)}")
+        # Fallback to basic response
+        fallback_response = "I'm here to help! Tell me about your day or ask me anything about your habits."
+        
+        conversation = models.Conversation(
+            user_id=current_user.id,
+            message=message.message,
+            response=fallback_response,
+            timestamp=time_service.now()
+        )
+        db.add(conversation)
+        db.commit()
+        db.refresh(conversation)
+        
+        # Embed the fallback conversation too
+        try:
+            vector_store.embed_conversation(conversation)
+        except Exception as e:
+            logger.warning(f"Failed to embed fallback conversation {conversation.id}: {e}")
+        
+        return schemas.ChatResponse(
+            message=message.message,
+            response=fallback_response,
+            timestamp=conversation.timestamp
+        )
+
 def generate_demo_response(message: str, habits: list, moods: list, commitment_acknowledgments: list = None) -> str:
     """Generate a demo response when no AI API is available"""
     message_lower = message.lower()
@@ -664,6 +781,13 @@ def create_person(
     db.add(db_person)
     db.commit()
     db.refresh(db_person)
+    
+    # Embed the new person for semantic search
+    try:
+        vector_store.embed_person(db_person)
+    except Exception as e:
+        logger.warning(f"Failed to embed person {db_person.id}: {e}")
+    
     return db_person
 
 @app.get("/people/{person_id}", response_model=schemas.Person)

@@ -41,6 +41,10 @@ secrets/
 *.sqlite3
 database.db
 
+# Vector Database (ChromaDB)
+chroma_db/
+*.bin
+
 # Logs
 *.log
 logs/
