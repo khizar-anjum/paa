@@ -11,3 +11,5 @@ python-dotenv>=1.0.0
 schedule>=1.2.0
 apscheduler>=3.11.0
 chromadb>=0.4.17
+spacy>=3.8.0
+scikit-learn>=1.7.0

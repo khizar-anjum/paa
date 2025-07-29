@@ -181,7 +181,7 @@ class VectorStore:
         try:
             results = self.conversations_collection.query(
                 query_texts=[query],
-                where={"user_id": user_id},
+                where={"user_id": {"$eq": user_id}},
                 n_results=limit
             )
             
@@ -228,7 +228,7 @@ class VectorStore:
         try:
             results = self.habits_collection.query(
                 query_texts=[query],
-                where={"user_id": user_id, "is_active": True},
+                where={"$and": [{"user_id": {"$eq": user_id}}, {"is_active": {"$eq": True}}]},
                 n_results=limit
             )
             
@@ -262,7 +262,7 @@ class VectorStore:
         try:
             results = self.people_collection.query(
                 query_texts=[query],
-                where={"user_id": user_id},
+                where={"user_id": {"$eq": user_id}},
                 n_results=limit
             )
             
@@ -297,7 +297,7 @@ class VectorStore:
         try:
             results = self.commitments_collection.query(
                 query_texts=[query],
-                where={"user_id": user_id},
+                where={"user_id": {"$eq": user_id}},
                 n_results=limit
             )
             

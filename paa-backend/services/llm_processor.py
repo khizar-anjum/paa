@@ -126,12 +126,22 @@ Always respond with valid JSON matching the schema."""
             # Parse the response
             response_text = response.content[0].text
             
+            # Debug logging - show raw LLM response
+            if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                debug_logger.debug(f"🤖 Raw LLM Response: {response_text[:1000]}{'...' if len(response_text) > 1000 else ''}")
+            
             # Estimate tokens (rough approximation)
             tokens_estimate = len(prompt.split()) + len(response_text.split())
             
             # Try to parse as JSON
             try:
                 response_data = json.loads(response_text)
+                
+                # Check if response_data is a dictionary (structured response)
+                if not isinstance(response_data, dict):
+                    logger.warning(f"API returned non-dict JSON: {type(response_data)}")
+                    return self._create_fallback_response(message, response_text)
+                
                 structured_response = self._parse_structured_response(response_data)
                 
                 # Debug logging - success
@@ -163,7 +173,14 @@ Always respond with valid JSON matching the schema."""
                 return self._create_fallback_response(message, response_text)
                 
         except Exception as e:
-            logger.error(f"Error calling Anthropic API: {e}")
+            # Add more detailed error information
+            import traceback
+            error_details = traceback.format_exc()
+            if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
+                debug_logger.error(f"❌ LLM Processing Error: {e}")
+                debug_logger.debug(f"Full traceback: {error_details}")
+            else:
+                logger.error(f"Error calling Anthropic API: {e}")
             
             # Debug logging - API error
             if os.getenv("DEBUG_LLM_CALLS", "false").lower() == "true":
@@ -172,7 +189,7 @@ Always respond with valid JSON matching the schema."""
                     response_length=0,
                     api_call_time=(time.time() - start_time) * 1000,
                     tokens_used=0,
-                    structured_output={"error": str(e)}
+                    structured_output={"error": str(e), "traceback": error_details[:500]}
                 )
             
             return self._generate_demo_response(message, intent, context)
@@ -211,22 +228,52 @@ Always respond with valid JSON matching the schema."""
         if context.conversations:
             prompt_parts.append("\nRecent conversations:")
             for conv in context.conversations[:3]:
-                prompt_parts.append(f"  - {conv.get('timestamp', 'Unknown time')}: {conv.get('message', '')}")
+                # Defensive programming: ensure conv is a dictionary
+                if isinstance(conv, dict):
+                    timestamp = conv.get('timestamp', 'Unknown time')
+                    message = conv.get('message', '')
+                    prompt_parts.append(f"  - {timestamp}: {message}")
+                else:
+                    # Handle unexpected format gracefully
+                    prompt_parts.append(f"  - Unknown format: {str(conv)[:50]}")
         
         if context.habit_context:
             prompt_parts.append("\nUser's habits:")
             for habit_name, habit_data in context.habit_context.items():
-                streak = habit_data.get('current_streak', 0)
-                completed_today = habit_data.get('completed_today', False)
-                prompt_parts.append(f"  - {habit_name}: {streak} day streak, {'completed' if completed_today else 'not completed'} today")
+                # Defensive programming: ensure habit_data is a dictionary
+                if isinstance(habit_data, dict):
+                    streak = habit_data.get('current_streak', 0)
+                    completed_today = habit_data.get('completed_today', False)
+                    prompt_parts.append(f"  - {habit_name}: {streak} day streak, {'completed' if completed_today else 'not completed'} today")
+                else:
+                    prompt_parts.append(f"  - {habit_name}: {str(habit_data)[:50]}")
         
         if context.people_context:
             prompt_parts.append("\nPeople mentioned:")
             for person_name, person_data in context.people_context.items():
-                prompt_parts.append(f"  - {person_name}: {person_data.get('relationship', 'Unknown relationship')}")
+                # Defensive programming: ensure person_data is a dictionary
+                if isinstance(person_data, dict):
+                    relationship = person_data.get('relationship', 'Unknown relationship')
+                    prompt_parts.append(f"  - {person_name}: {relationship}")
+                else:
+                    prompt_parts.append(f"  - {person_name}: {str(person_data)[:50]}")
         
         if context.mood_patterns:
-            prompt_parts.append(f"\nRecent mood: {context.mood_patterns.get('recent_average', 'Unknown')}")
+            # Defensive programming: ensure mood_patterns is a dictionary
+            if isinstance(context.mood_patterns, dict):
+                recent_mood = context.mood_patterns.get('recent_average', 'Unknown')
+                prompt_parts.append(f"\nRecent mood: {recent_mood}")
+            else:
+                prompt_parts.append(f"\nRecent mood: {str(context.mood_patterns)[:50]}")
+        
+        if hasattr(context, 'similar_commitments') and context.similar_commitments:
+            prompt_parts.append("\nUser's current commitments and tasks:")
+            for commitment in context.similar_commitments[:5]:  # Show top 5 commitments
+                if isinstance(commitment, dict):
+                    task = commitment.get('task_description', 'Unknown task')
+                    deadline_text = commitment.get('deadline_text', 'No deadline')
+                    status = commitment.get('status', 'unknown')
+                    prompt_parts.append(f"  - {task} ({deadline_text}, status: {status})")
         
         # User data if provided
         if user_data:
@@ -239,9 +286,23 @@ Always respond with valid JSON matching the schema."""
     
     def _parse_structured_response(self, response_data: Dict[str, Any]) -> StructuredAIResponse:
         """Parse the LLM response into our structured format"""
+        
+        # Defensive check - ensure response_data is a dictionary
+        if not isinstance(response_data, dict):
+            logger.error(f"Expected dict, got {type(response_data)}: {response_data}")
+            raise ValueError(f"Invalid response data type: {type(response_data)}")
+        
         # Parse commitments
         commitments = []
-        for commit_data in response_data.get('commitments', []):
+        commitments_data = response_data.get('commitments', [])
+        if not isinstance(commitments_data, list):
+            logger.warning(f"Expected list for commitments, got {type(commitments_data)}")
+            commitments_data = []
+            
+        for commit_data in commitments_data:
+            if not isinstance(commit_data, dict):
+                continue
+                
             # Parse deadline
             deadline = None
             if commit_data.get('deadline'):
@@ -250,29 +311,48 @@ Always respond with valid JSON matching the schema."""
                 except:
                     deadline = self._parse_fuzzy_deadline(commit_data.get('deadline', ''))
             
-            # Parse reminder strategy
-            reminder_data = commit_data.get('reminder_strategy', {})
-            initial_reminder = reminder_data.get('initial_reminder')
-            if initial_reminder:
-                try:
-                    initial_reminder = datetime.fromisoformat(initial_reminder.replace('Z', '+00:00'))
-                except:
-                    initial_reminder = deadline - timedelta(hours=1) if deadline else time_service.now() + timedelta(hours=1)
-            else:
-                initial_reminder = deadline - timedelta(hours=1) if deadline else time_service.now() + timedelta(hours=1)
+            # Parse reminder strategy - handle both string and object formats
+            reminder_strategy_raw = commit_data.get('reminder_strategy', {})
             
-            follow_ups = []
-            for fu in reminder_data.get('follow_up_reminders', []):
-                try:
-                    follow_ups.append(datetime.fromisoformat(fu.replace('Z', '+00:00')))
-                except:
-                    pass
+            if isinstance(reminder_strategy_raw, str):
+                # API returned string format like "1 day before"
+                initial_reminder = self._parse_reminder_string(reminder_strategy_raw, deadline)
+                follow_ups = []
+                escalation = 'gentle'
+                custom_message = None
+            elif isinstance(reminder_strategy_raw, dict):
+                # API returned object format
+                reminder_data = reminder_strategy_raw
+                initial_reminder = reminder_data.get('initial_reminder')
+                if initial_reminder:
+                    try:
+                        initial_reminder = datetime.fromisoformat(initial_reminder.replace('Z', '+00:00'))
+                    except:
+                        initial_reminder = deadline - timedelta(hours=1) if deadline else time_service.now() + timedelta(hours=1)
+                else:
+                    initial_reminder = deadline - timedelta(hours=1) if deadline else time_service.now() + timedelta(hours=1)
+                
+                follow_ups = []
+                for fu in reminder_data.get('follow_up_reminders', []):
+                    try:
+                        follow_ups.append(datetime.fromisoformat(fu.replace('Z', '+00:00')))
+                    except:
+                        pass
+                
+                escalation = reminder_data.get('escalation', 'gentle')
+                custom_message = reminder_data.get('custom_message')
+            else:
+                # Fallback for unexpected format
+                initial_reminder = deadline - timedelta(hours=1) if deadline else time_service.now() + timedelta(hours=1)
+                follow_ups = []
+                escalation = 'gentle'
+                custom_message = None
             
             reminder_strategy = ReminderStrategy(
                 initial_reminder=initial_reminder,
                 follow_up_reminders=follow_ups,
-                escalation=reminder_data.get('escalation', 'gentle'),
-                custom_message=reminder_data.get('custom_message')
+                escalation=escalation,
+                custom_message=custom_message
             )
             
             commitment = ExtractedCommitment(
@@ -288,31 +368,51 @@ Always respond with valid JSON matching the schema."""
         
         # Parse habit actions
         habit_actions = []
-        for habit_data in response_data.get('habit_actions', []):
-            action = HabitAction(
-                action_type=habit_data.get('action_type', 'log_completion'),
-                habit_identifier=habit_data.get('habit_identifier', ''),
-                details=habit_data.get('details', {}),
-                completion_date=habit_data.get('completion_date'),
-                notes=habit_data.get('notes'),
-                new_habit_details=habit_data.get('new_habit_details')
-            )
-            habit_actions.append(action)
+        habit_actions_data = response_data.get('habit_actions', [])
+        if not isinstance(habit_actions_data, list):
+            logger.warning(f"Expected list for habit_actions, got {type(habit_actions_data)}")
+            habit_actions_data = []
+            
+        for habit_data in habit_actions_data:
+            if isinstance(habit_data, dict):
+                action = HabitAction(
+                    action_type=habit_data.get('action_type', 'log_completion'),
+                    habit_identifier=habit_data.get('habit_identifier', ''),
+                    details=habit_data.get('details', {}),
+                    completion_date=habit_data.get('completion_date'),
+                    notes=habit_data.get('notes'),
+                    new_habit_details=habit_data.get('new_habit_details')
+                )
+                habit_actions.append(action)
         
         # Parse people updates
         people_updates = []
-        for person_data in response_data.get('people_updates', []):
-            update = AIPersonUpdate(
-                person_name=person_data.get('person_name', ''),
-                update_type=person_data.get('update_type', 'add_note'),
-                content=person_data.get('content', ''),
-                tags=person_data.get('tags', [])
-            )
-            people_updates.append(update)
+        people_updates_data = response_data.get('people_updates', [])
+        if not isinstance(people_updates_data, list):
+            logger.warning(f"Expected list for people_updates, got {type(people_updates_data)}")
+            people_updates_data = []
+            
+        for person_data in people_updates_data:
+            if isinstance(person_data, dict):
+                update = AIPersonUpdate(
+                    person_name=person_data.get('person_name', ''),
+                    update_type=person_data.get('update_type', 'add_note'),
+                    content=person_data.get('content', ''),
+                    tags=person_data.get('tags', [])
+                )
+                people_updates.append(update)
         
         # Parse scheduled actions
         scheduled_actions = []
-        for sched_data in response_data.get('scheduled_actions', []):
+        scheduled_actions_data = response_data.get('scheduled_actions', [])
+        if not isinstance(scheduled_actions_data, list):
+            logger.warning(f"Expected list for scheduled_actions, got {type(scheduled_actions_data)}")
+            scheduled_actions_data = []
+            
+        for sched_data in scheduled_actions_data:
+            if not isinstance(sched_data, dict):
+                continue
+                
             send_time = sched_data.get('send_time')
             if send_time:
                 try:
@@ -335,8 +435,18 @@ Always respond with valid JSON matching the schema."""
         mood_analysis = None
         if response_data.get('mood_analysis'):
             mood_data = response_data['mood_analysis']
+            
+            # Normalize mood value to lowercase to match schema
+            detected_mood = mood_data.get('detected_mood', 'neutral').lower()
+            
+            # Validate against allowed values and fallback if invalid
+            valid_moods = ['very_positive', 'positive', 'neutral', 'negative', 'very_negative']
+            if detected_mood not in valid_moods:
+                logger.warning(f"Invalid mood value received: {detected_mood}, falling back to 'neutral'")
+                detected_mood = 'neutral'
+            
             mood_analysis = MoodAnalysis(
-                detected_mood=mood_data.get('detected_mood', 'neutral'),
+                detected_mood=detected_mood,
                 confidence=mood_data.get('confidence', 0.5),
                 contributing_factors=mood_data.get('contributing_factors', []),
                 suggested_interventions=mood_data.get('suggested_interventions', []),
@@ -380,6 +490,46 @@ Always respond with valid JSON matching the schema."""
             return (now + timedelta(days=days_until_sunday)).replace(hour=23, minute=59, second=59)
         
         return None
+    
+    def _parse_reminder_string(self, reminder_str: str, deadline: Optional[datetime]) -> datetime:
+        """Parse reminder strategy string like '1 day before' into datetime"""
+        now = time_service.now()
+        reminder_lower = reminder_str.lower()
+        
+        if not deadline:
+            # If no deadline, set reminder for 1 hour from now
+            return now + timedelta(hours=1)
+        
+        # Parse patterns like "X minutes/hours/days before"
+        if 'minutes before' in reminder_lower:
+            import re
+            match = re.search(r'(\d+)\s*minutes?\s*before', reminder_lower)
+            if match:
+                minutes = int(match.group(1))
+                return deadline - timedelta(minutes=minutes)
+        
+        if 'hours before' in reminder_lower:
+            import re
+            match = re.search(r'(\d+)\s*hours?\s*before', reminder_lower)
+            if match:
+                hours = int(match.group(1))
+                return deadline - timedelta(hours=hours)
+        
+        if 'hour before' in reminder_lower:
+            return deadline - timedelta(hours=1)
+        
+        if 'day before' in reminder_lower or 'days before' in reminder_lower:
+            import re
+            match = re.search(r'(\d+)\s*days?\s*before', reminder_lower)
+            if match:
+                days = int(match.group(1))
+                return deadline - timedelta(days=days)
+            else:
+                # Default to 1 day before
+                return deadline - timedelta(days=1)
+        
+        # Default fallback - 1 hour before deadline
+        return deadline - timedelta(hours=1)
     
     def _create_fallback_response(self, message: str, raw_response: str) -> StructuredAIResponse:
         """Create a fallback response when JSON parsing fails"""

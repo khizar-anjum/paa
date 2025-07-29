@@ -286,6 +286,17 @@ class HybridRAGSystem:
                 'semantic_similarity': None
             }
         
+        # Check if this is a query about upcoming/pending tasks
+        message_lower = message.lower()
+        upcoming_keywords = ['upcoming', 'to do', 'todo', 'pending', 'need to do', 'have to do', 
+                           'things to do', 'tasks', 'commitments', 'reminders']
+        
+        is_upcoming_query = any(keyword in message_lower for keyword in upcoming_keywords)
+        
+        if is_upcoming_query:
+            # Get all active/pending commitments, prioritizing those with deadlines
+            return self._get_upcoming_commitments(db, user_id, limit)
+        
         # Add vector matches
         for commitment in vector_commitments:
             commit_id = commitment['commitment_id']
@@ -294,7 +305,6 @@ class HybridRAGSystem:
                     'id': commit_id,
                     'task_description': commitment['task_description'],
                     'status': commitment['status'],
-                    'priority': commitment['priority'],
                     'deadline': commitment['deadline'],
                     'retrieval_method': 'semantic',
                     'semantic_similarity': commitment['similarity_score']
@@ -308,6 +318,72 @@ class HybridRAGSystem:
         )
         
         return sorted_commitments[:limit]
+    
+    def _get_upcoming_commitments(
+        self,
+        db: Session,
+        user_id: int,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get all active/pending commitments, prioritized by deadline"""
+        from datetime import timedelta
+        
+        now = time_service.now()
+        today = now.date()  # Get today's date for comparison
+        
+        # Get all active commitments (not completed)
+        commitments = db.query(models.Commitment).filter(
+            models.Commitment.user_id == user_id,
+            models.Commitment.status.in_(['pending', 'in_progress'])  # Only active commitments
+        ).all()
+        
+        upcoming_commitments = []
+        
+        for commitment in commitments:
+            # Calculate priority based on deadline
+            priority_score = 0
+            status_text = commitment.status
+            
+            if commitment.deadline:
+                # Convert deadline (date) to compare with today (date)
+                days_until = (commitment.deadline - today).days
+                
+                if days_until < 0:
+                    # Overdue
+                    priority_score = 1000 + abs(days_until)  # Higher score = higher priority
+                    status_text = f"overdue by {abs(days_until)} days"
+                elif days_until == 0:
+                    # Due today
+                    priority_score = 500
+                    status_text = "due today"
+                elif days_until <= 3:
+                    # Due within 3 days
+                    priority_score = 100 - days_until
+                    status_text = f"due in {days_until} days"
+                else:
+                    # Future commitments
+                    priority_score = max(0, 50 - days_until)
+                    status_text = f"due in {days_until} days"
+            else:
+                # No deadline specified
+                priority_score = 25
+                status_text = "no deadline"
+            
+            upcoming_commitments.append({
+                'id': commitment.id,
+                'task_description': commitment.task_description,
+                'status': commitment.status,
+                'deadline': commitment.deadline.isoformat() if commitment.deadline else None,
+                'deadline_text': status_text,
+                'created_at': commitment.created_at.isoformat(),
+                'priority_score': priority_score,
+                'retrieval_method': 'upcoming_query'
+            })
+        
+        # Sort by priority score (highest first)
+        upcoming_commitments.sort(key=lambda x: x['priority_score'], reverse=True)
+        
+        return upcoming_commitments[:limit]
     
     def _get_recent_conversations(self, db: Session, user_id: int, limit: int = 5) -> List[Dict[str, Any]]:
         """Get recent conversation history"""

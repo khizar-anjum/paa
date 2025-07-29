@@ -366,6 +366,37 @@ class DebugLogger:
             },
             "recent_executions_count": len(self.recent_executions)
         }
+    
+    # Standard logging methods for compatibility
+    def info(self, message: str):
+        """Log info message"""
+        if self.debug_mode:
+            print(f"{ColorCodes.OKBLUE}ℹ️  {message}{ColorCodes.ENDC}")
+        logging.info(message)
+    
+    def warning(self, message: str):
+        """Log warning message"""
+        if self.debug_mode:
+            print(f"{ColorCodes.WARNING}⚠️  {message}{ColorCodes.ENDC}")
+        logging.warning(message)
+    
+    def error(self, message: str):
+        """Log error message"""
+        if self.debug_mode:
+            print(f"{ColorCodes.FAIL}❌ {message}{ColorCodes.ENDC}")
+        logging.error(message)
+        
+        # Update current execution if active
+        if self.current_execution:
+            self.current_execution.success = False
+            if not self.current_execution.error:
+                self.current_execution.error = message
+    
+    def debug(self, message: str):
+        """Log debug message"""
+        if self.debug_mode:
+            print(f"{ColorCodes.OKCYAN}🐛 {message}{ColorCodes.ENDC}")
+        logging.debug(message)
 
 
 # Global debug logger instance

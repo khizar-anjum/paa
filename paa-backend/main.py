@@ -22,7 +22,7 @@ from anthropic import Anthropic
 from scheduler import start_scheduler, stop_scheduler, initialize_default_prompts_for_user_sync
 from services.commitment_parser import commitment_parser
 from services.time_service import time_service
-from services.intent_classifier import intent_classifier
+from services.nlp_intent_classifier import nlp_intent_classifier
 from services.llm_processor import llm_processor
 from services.rag_system import create_rag_system
 from services.action_processor import create_action_processor
@@ -639,7 +639,7 @@ async def enhanced_chat(
     
     try:
         # 1. Intent Classification
-        intent = intent_classifier.classify(message.message)
+        intent = nlp_intent_classifier.classify(message.message)
         
         # 2. RAG Context Retrieval
         context = rag_system.retrieve_context(message.message, intent, current_user.id)
