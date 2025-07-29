@@ -11,7 +11,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python build directories (not frontend lib)
+paa-backend/lib/
 lib64/
 parts/
 sdist/
