@@ -8,6 +8,8 @@ import CommitmentFiltersComponent from '@/app/components/CommitmentFilters';
 import EditCommitmentModal from '@/app/components/EditCommitmentModal';
 import CreateCommitmentModal from '@/app/components/CreateCommitmentModal';
 import { toast } from 'sonner';
+import { useDataRefresh } from '@/hooks/useDataRefresh';
+import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
 
 export default function CommitmentsPage() {
   const [commitments, setCommitments] = useState<Commitment[]>([]);
@@ -40,6 +42,13 @@ export default function CommitmentsPage() {
   useEffect(() => {
     loadCommitments();
   }, [filters]);
+  
+  // Auto-refresh when commitments are updated from chat
+  useDataRefresh(
+    [DATA_EVENTS.COMMITMENT_UPDATED],
+    loadCommitments,
+    [filters]
+  );
 
   // Filter commitments by search query
   const filteredCommitments = useMemo(() => {

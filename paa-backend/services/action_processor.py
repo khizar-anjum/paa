@@ -57,6 +57,7 @@ class ActionProcessor:
                 commitments_count=len(response.commitments),
                 habit_actions_count=len(response.habit_actions),
                 people_updates_count=len(response.people_updates),
+                user_profile_updates_count=len(response.user_profile_updates),
                 scheduled_actions_count=len(response.scheduled_actions)
             )
             debug_logger.info(f"🎯 Action Processor: Processing {len(response.commitments)} commitments for user {user_id}")
@@ -65,8 +66,8 @@ class ActionProcessor:
         
         # Get database session
         db = self.db_session_factory()
-        executed_actions = {"commitments": 0, "habit_actions": 0, "people_updates": 0, "scheduled_actions": 0}
-        failed_actions = {"commitments": 0, "habit_actions": 0, "people_updates": 0, "scheduled_actions": 0}
+        executed_actions = {"commitments": 0, "habit_actions": 0, "people_updates": 0, "user_profile_updates": 0, "scheduled_actions": 0}
+        failed_actions = {"commitments": 0, "habit_actions": 0, "people_updates": 0, "user_profile_updates": 0, "scheduled_actions": 0}
         database_changes = {}
         
         try:
@@ -85,7 +86,11 @@ class ActionProcessor:
             for person_update in response.people_updates:
                 tasks.append(self._update_person(person_update, user_id, db))
             
-            # 4. Process mood if detected
+            # 4. Handle user profile updates
+            for profile_update in response.user_profile_updates:
+                tasks.append(self._update_user_profile(profile_update, user_id, db))
+            
+            # 5. Process mood if detected
             if response.mood_analysis:
                 tasks.append(self._process_mood(response.mood_analysis, user_id, db))
             
@@ -126,7 +131,7 @@ class ActionProcessor:
                     })
                     failed_actions['unknown'] = failed_actions.get('unknown', 0) + 1
             
-            # 5. Schedule proactive messages (separate transaction)
+            # 6. Schedule proactive messages (separate transaction)
             for scheduled in response.scheduled_actions:
                 try:
                     result = await self._schedule_action(scheduled, user_id, db)
@@ -469,6 +474,66 @@ class ActionProcessor:
             'description': f"Updated {habit.name}: {', '.join(updated_fields)}",
             'user_visible': True
         }
+    
+    async def _update_user_profile(
+        self,
+        profile_update: Any,  # Will be AIUserProfileUpdate
+        user_id: int,
+        db: Session
+    ) -> Dict[str, Any]:
+        """Update the user's own profile information"""
+        try:
+            # Get or create user profile
+            profile = db.query(models.UserProfile).filter(
+                models.UserProfile.user_id == user_id
+            ).first()
+            
+            if not profile:
+                # Create profile if it doesn't exist
+                profile = models.UserProfile(
+                    user_id=user_id,
+                    display_name="",
+                    description="",
+                    created_at=time_service.now(),
+                    updated_at=time_service.now()
+                )
+                db.add(profile)
+                db.flush()
+            
+            # Apply the update based on type
+            if profile_update.update_type == 'update_info':
+                # Replace existing content
+                profile.description = profile_update.content
+            elif profile_update.update_type == 'add_info' or profile_update.update_type == 'append_info':
+                # Append to existing content
+                if profile.description:
+                    # Add new info on a new paragraph
+                    profile.description += f"\n\n{profile_update.content}"
+                else:
+                    profile.description = profile_update.content
+            
+            profile.updated_at = time_service.now()
+            
+            debug_logger.info(f"✅ Updated user profile: {profile_update.update_type} - {profile_update.content[:50]}...")
+            
+            return {
+                'success': True,
+                'type': 'user_profile_updated',
+                'description': f"Updated your profile with: {profile_update.content[:50]}...",
+                'user_visible': True,
+                'action_type': 'user_profile_updates',
+                'db_action': 'profile_updated'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error updating user profile: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'type': 'user_profile_update_failed',
+                'user_visible': False,
+                'action_type': 'user_profile_updates'
+            }
     
     async def _update_person(
         self,

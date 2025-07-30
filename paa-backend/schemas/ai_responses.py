@@ -114,6 +114,14 @@ class ResponseMetadata(BaseModel):
     context_used: List[str] = Field(default_factory=list)
 
 
+# User Profile Update Schema
+class UserProfileUpdate(BaseModel):
+    """Update to user's own profile information"""
+    update_type: Literal['add_info', 'update_info', 'append_info']
+    content: str
+    category: Optional[Literal['personal', 'professional', 'preferences', 'goals', 'general']] = 'general'
+
+
 # Enhanced Context Schema for RAG System
 class EnhancedContext(BaseModel):
     """Context retrieved by the RAG system"""
@@ -134,6 +142,7 @@ class StructuredAIResponse(BaseModel):
     commitments: List[ExtractedCommitment] = Field(default_factory=list)
     habit_actions: List[HabitAction] = Field(default_factory=list)
     people_updates: List[PersonUpdate] = Field(default_factory=list)
+    user_profile_updates: List[UserProfileUpdate] = Field(default_factory=list)
     scheduled_actions: List[ScheduledAction] = Field(default_factory=list)
     mood_analysis: Optional[MoodAnalysis] = None
     response_metadata: ResponseMetadata

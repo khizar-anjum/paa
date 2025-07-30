@@ -32,12 +32,15 @@ class HybridLLMProcessor:
         """Build the system prompt for structured output"""
         return """You are a proactive AI assistant helping users manage their habits, commitments, and personal well-being.
 
-CRITICAL: Your responses must be ONLY valid JSON format matching the StructuredAIResponse schema.
-Do not include any system messages, reminders, or additional text outside the JSON.
-Do not include any explanatory text before or after the JSON.
-Start your response with { and end with }.
+OUTPUT FORMAT SPECIFICATION:
+You MUST output ONLY valid JSON that precisely matches the StructuredAIResponse schema below. Your response must:
+- Start with { and end with }
+- Contain no text before or after the JSON
+- Include every required field from the schema
+- Use exact field names and data types as specified
+- Follow ISO datetime formats where specified
 
-EXACT SCHEMA FORMAT:
+REQUIRED JSON SCHEMA (you must match this exactly):
 {
     "message": "Your conversational response to the user",
     "commitments": [
@@ -74,6 +77,13 @@ EXACT SCHEMA FORMAT:
             "tags": []
         }
     ],
+    "user_profile_updates": [
+        {
+            "update_type": "add_info",
+            "content": "looking for a roommate",
+            "category": "personal"
+        }
+    ],
     "scheduled_actions": [
         {
             "message_content": "follow up message",
@@ -98,21 +108,31 @@ EXACT SCHEMA FORMAT:
     }
 }
 
-CRITICAL INSTRUCTIONS:
-1. Use ONLY the field names shown in the schema above
-2. For commitments, use "task_description" NOT "title" or "name"
-3. For datetime fields, use ISO format: "2025-07-29T23:59:59"
-4. For date fields, use format: "2025-07-29"
-5. Include ALL required fields even if null/empty
-6. Be encouraging and supportive in the "message" field
-7. When listing existing commitments, provide them in the conversational message, NOT as new commitments
+FIELD REQUIREMENTS:
+- "message": String - Your conversational response to the user (required)
+- "commitments": Array - Only for NEW commitments the user is making (required, can be empty [])
+- "habit_actions": Array - Actions related to habits (required, can be empty [])
+- "people_updates": Array - Updates about OTHER people (required, can be empty [])
+- "user_profile_updates": Array - Updates to user's own profile (required, can be empty [])
+- "scheduled_actions": Array - Proactive messages to schedule (required, can be empty [])
+- "mood_analysis": Object or null - Mood detection (required)
+- "response_metadata": Object - Meta information (required)
 
-For information queries about existing commitments/habits:
-- Describe them in the conversational "message" field
-- Do NOT create new commitment objects for existing ones
-- Only create commitment objects for NEW commitments the user is making
+CRITICAL DATA FORMATTING:
+- Datetime fields: ISO format "2025-07-29T23:59:59"
+- Date fields: "2025-07-29"
+- Use "task_description" NOT "title" or "name" for commitments
+- deadline_type: must be "specific", "fuzzy", or "recurring"
+- priority: must be "high", "medium", or "low"
+- detected_mood: must be "very_positive", "positive", "neutral", "negative", or "very_negative"
 
-Always respond with valid JSON matching the EXACT schema above."""
+CONTENT GUIDELINES:
+- For information queries: describe existing data in "message", don't create new objects
+- User personal info (roommate search, job status, goals): use "user_profile_updates"  
+- Information about other people: use "people_updates"
+- Be encouraging and supportive in the "message" field
+
+Your output must be parseable JSON that validates against this exact schema."""
     
     def process_message(
         self,
@@ -515,6 +535,23 @@ Always respond with valid JSON matching the EXACT schema above."""
                 )
                 people_updates.append(update)
         
+        # Parse user profile updates
+        user_profile_updates = []
+        user_profile_updates_data = response_data.get('user_profile_updates', [])
+        if not isinstance(user_profile_updates_data, list):
+            logger.warning(f"Expected list for user_profile_updates, got {type(user_profile_updates_data)}")
+            user_profile_updates_data = []
+            
+        for profile_data in user_profile_updates_data:
+            if isinstance(profile_data, dict):
+                from schemas.ai_responses import UserProfileUpdate as AIUserProfileUpdate
+                update = AIUserProfileUpdate(
+                    update_type=profile_data.get('update_type', 'add_info'),
+                    content=profile_data.get('content', ''),
+                    category=profile_data.get('category', 'general')
+                )
+                user_profile_updates.append(update)
+        
         # Parse scheduled actions
         scheduled_actions = []
         scheduled_actions_data = response_data.get('scheduled_actions', [])
@@ -580,6 +617,7 @@ Always respond with valid JSON matching the EXACT schema above."""
             commitments=commitments,
             habit_actions=habit_actions,
             people_updates=people_updates,
+            user_profile_updates=user_profile_updates,
             scheduled_actions=scheduled_actions,
             mood_analysis=mood_analysis,
             response_metadata=metadata
@@ -674,6 +712,7 @@ Always respond with valid JSON matching the EXACT schema above."""
             commitments=[],
             habit_actions=[],
             people_updates=[],
+            user_profile_updates=[],
             scheduled_actions=[],
             mood_analysis=None,
             response_metadata=ResponseMetadata(
@@ -699,6 +738,7 @@ Always respond with valid JSON matching the EXACT schema above."""
             commitments=[],
             habit_actions=[],
             people_updates=[],
+            user_profile_updates=[],
             scheduled_actions=[],
             mood_analysis=None,
             response_metadata=ResponseMetadata(

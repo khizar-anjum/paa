@@ -6,15 +6,13 @@ import { profileApi, UserProfile } from '@/lib/api/profile';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useDataRefresh } from '@/hooks/useDataRefresh';
+import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
 
   const loadProfile = async () => {
     try {
@@ -32,6 +30,17 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  // Auto-refresh when profile is updated from chat
+  useDataRefresh(
+    [DATA_EVENTS.PROFILE_UPDATED],
+    loadProfile,
+    []
+  );
 
   if (loading) {
     return (

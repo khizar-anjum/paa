@@ -262,14 +262,15 @@ class DebugLogger:
             print(f"   Actions: {commitments} commitments, {habit_actions} habits, {people_updates} people")
     
     def log_action_processing_start(self, commitments_count: int, habit_actions_count: int, 
-                                   people_updates_count: int, scheduled_actions_count: int):
+                                   people_updates_count: int, user_profile_updates_count: int, scheduled_actions_count: int):
         """Log action processing start"""
         if not (self.debug_mode and os.getenv("DEBUG_ACTION_PROCESSOR", "false").lower() == "true"):
             return
         
         print(f"{ColorCodes.WARNING}⚡ Action Processing Started:{ColorCodes.ENDC}")
         print(f"   {commitments_count} commitments, {habit_actions_count} habit actions")
-        print(f"   {people_updates_count} people updates, {scheduled_actions_count} scheduled actions")
+        print(f"   {people_updates_count} people updates, {user_profile_updates_count} profile updates")
+        print(f"   {scheduled_actions_count} scheduled actions")
     
     def log_action_processing_result(self, executed_actions: Dict[str, int], 
                                    failed_actions: Dict[str, int], database_changes: Dict[str, int]):

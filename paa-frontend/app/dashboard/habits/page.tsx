@@ -7,6 +7,8 @@ import { habitsApi, Habit } from '@/lib/api/habits';
 import { HabitCard } from '@/app/components/HabitCard';
 import { CreateHabitModal } from '@/app/components/CreateHabitModal';
 import { EditHabitModal } from '@/app/components/EditHabitModal';
+import { useDataRefresh } from '@/hooks/useDataRefresh';
+import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
 
 export default function HabitsPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -14,20 +16,30 @@ export default function HabitsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
 
-  useEffect(() => {
-    fetchHabits();
-  }, []);
-
   const fetchHabits = async () => {
     try {
+      console.log('Fetching habits...');
       const data = await habitsApi.getAll();
+      console.log('Habits loaded:', data);
       setHabits(data);
     } catch (error) {
+      console.error('Error loading habits:', error);
       toast.error('Failed to load habits');
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchHabits();
+  }, []);
+
+  // Auto-refresh when habits are updated from chat
+  useDataRefresh(
+    [DATA_EVENTS.HABIT_UPDATED],
+    fetchHabits,
+    []
+  );
 
   const handleCreateHabit = async (data: any) => {
     try {

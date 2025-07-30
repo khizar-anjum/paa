@@ -7,16 +7,14 @@ import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CreatePersonModal } from '@/app/components/CreatePersonModal';
+import { useDataRefresh } from '@/hooks/useDataRefresh';
+import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
 
 export default function PeoplePage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-
-  useEffect(() => {
-    loadPeople();
-  }, []);
 
   const loadPeople = async () => {
     try {
@@ -29,6 +27,17 @@ export default function PeoplePage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadPeople();
+  }, []);
+
+  // Auto-refresh when profiles are updated from chat
+  useDataRefresh(
+    [DATA_EVENTS.PROFILE_UPDATED],
+    loadPeople,
+    []
+  );
 
   const handlePersonClick = (person: Person) => {
     setSelectedPerson(person);

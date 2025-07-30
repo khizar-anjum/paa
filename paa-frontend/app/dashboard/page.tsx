@@ -7,6 +7,8 @@ import { DailyCheckInModal } from '@/app/components/DailyCheckInModal';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { analyticsApi, OverviewAnalytics } from '@/lib/api/analytics';
+import { useDataRefresh } from '@/hooks/useDataRefresh';
+import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -52,6 +54,21 @@ export default function DashboardPage() {
 
     loadData();
   }, []);
+
+  // Auto-refresh when data is updated from chat
+  useDataRefresh(
+    [DATA_EVENTS.CHECKIN_UPDATED, DATA_EVENTS.HABIT_UPDATED, DATA_EVENTS.COMMITMENT_UPDATED],
+    async () => {
+      // Only reload overview data, not the check-in prompt logic
+      try {
+        const overviewData = await analyticsApi.getOverview();
+        setOverview(overviewData);
+      } catch (error) {
+        console.error('Failed to refresh dashboard data');
+      }
+    },
+    []
+  );
 
   const quickActions = [
     {
