@@ -169,6 +169,19 @@ class ActionProcessor:
         
         return results
     
+    def _is_content_duplicate(self, existing_description: str, new_content: str) -> bool:
+        """Check if new content already exists in the description"""
+        if not existing_description:
+            return False
+            
+        # Normalize both strings for comparison
+        # Remove extra whitespace and convert to lowercase
+        normalized_existing = ' '.join(existing_description.lower().split())
+        normalized_new = ' '.join(new_content.lower().split())
+        
+        # Check if the new content is already in the existing description
+        return normalized_new in normalized_existing
+    
     async def _create_commitment(
         self,
         commitment: ExtractedCommitment,
@@ -505,12 +518,24 @@ class ActionProcessor:
                 # Replace existing content
                 profile.description = profile_update.content
             elif profile_update.update_type == 'add_info' or profile_update.update_type == 'append_info':
-                # Append to existing content
-                if profile.description:
-                    # Add new info on a new paragraph
-                    profile.description += f"\n\n{profile_update.content}"
+                # Check if content already exists before appending
+                if not self._is_content_duplicate(profile.description or "", profile_update.content):
+                    # Append to existing content
+                    if profile.description:
+                        # Add new info on a new paragraph
+                        profile.description += f"\n\n{profile_update.content}"
+                    else:
+                        profile.description = profile_update.content
                 else:
-                    profile.description = profile_update.content
+                    debug_logger.info(f"ℹ️ Skipping duplicate profile update: {profile_update.content[:50]}...")
+                    return {
+                        'success': True,
+                        'type': 'user_profile_duplicate_skipped',
+                        'description': f"Information already in your profile: {profile_update.content[:50]}...",
+                        'user_visible': True,
+                        'action_type': 'user_profile_updates',
+                        'db_action': 'skipped_duplicate'
+                    }
             
             profile.updated_at = time_service.now()
             
@@ -568,19 +593,33 @@ class ActionProcessor:
                 }
             
             elif person_update.update_type == 'add_note':
-                # Add note to existing description
-                if person.description:
-                    person.description += f"\n\n{person_update.content}"
+                # Check if content already exists before adding note
+                if not self._is_content_duplicate(person.description or "", person_update.content):
+                    # Add note to existing description
+                    if person.description:
+                        person.description += f"\n\n{person_update.content}"
+                    else:
+                        person.description = person_update.content
+                    person.updated_at = time_service.now()
+                    
+                    return {
+                        'success': True,
+                        'type': 'person_note_added',
+                        'description': f"Added note about {person_update.person_name}",
+                        'user_visible': True,
+                        'action_type': 'people_updates',
+                        'db_action': 'note_added'
+                    }
                 else:
-                    person.description = person_update.content
-                person.updated_at = time_service.now()
-                
-                return {
-                    'success': True,
-                    'type': 'person_note_added',
-                    'description': f"Added note about {person_update.person_name}",
-                    'user_visible': True
-                }
+                    debug_logger.info(f"ℹ️ Skipping duplicate note for {person_update.person_name}: {person_update.content[:50]}...")
+                    return {
+                        'success': True,
+                        'type': 'person_note_duplicate_skipped',
+                        'description': f"Note already exists for {person_update.person_name}: {person_update.content[:50]}...",
+                        'user_visible': True,
+                        'action_type': 'people_updates',
+                        'db_action': 'skipped_duplicate'
+                    }
             
             elif person_update.update_type == 'update_info':
                 # Update person info
