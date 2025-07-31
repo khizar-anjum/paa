@@ -846,6 +846,76 @@ Your output must be parseable JSON that validates against this exact schema."""
             return True
         except:
             return False
+    
+    def generate_session_name(self, messages: list) -> str:
+        """Generate a session name based on the first few messages"""
+        if not messages or len(messages) == 0:
+            return "New Chat"
+        
+        # Combine first 3 message pairs (user + AI) or up to 500 chars
+        conversation_text = ""
+        char_count = 0
+        
+        for msg in messages[:6]:  # Up to 3 message pairs
+            if hasattr(msg, 'message'):
+                text = f"User: {msg.message}\n"
+            elif hasattr(msg, 'response'):
+                text = f"AI: {msg.response}\n"
+            else:
+                continue
+                
+            if char_count + len(text) > 500:
+                break
+            conversation_text += text
+            char_count += len(text)
+        
+        if not conversation_text.strip():
+            return "New Chat"
+        
+        prompt = f"""Based on this conversation, generate a short, descriptive title (2-5 words) that captures the main topic or purpose. The title should be clear and concise.
+
+Conversation:
+{conversation_text}
+
+Respond with ONLY the title, no additional text or punctuation."""
+        
+        try:
+            if not self.anthropic_client:
+                # Fallback based on keywords in first message
+                first_msg = messages[0]
+                msg_text = ""
+                if hasattr(first_msg, 'message'):
+                    msg_text = first_msg.message.lower()
+                elif hasattr(first_msg, 'response'):
+                    msg_text = first_msg.response.lower()
+                
+                if 'habit' in msg_text:
+                    return "Habit Discussion"
+                elif 'commit' in msg_text or 'task' in msg_text:
+                    return "Task Planning"
+                elif 'mood' in msg_text or 'feel' in msg_text:
+                    return "Mood Check-in"
+                else:
+                    return "General Chat"
+            
+            response = self.anthropic_client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=50,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            title = response.content[0].text.strip()
+            
+            # Clean up the title
+            title = title.replace('"', '').replace("'", "")
+            if len(title) > 30:
+                title = title[:27] + "..."
+            
+            return title if title else "New Chat"
+            
+        except Exception as e:
+            logger.error(f"Failed to generate session name: {e}")
+            return "New Chat"
 
 
 # Global instance for easy importing

@@ -41,10 +41,38 @@ class Habit(HabitBase):
 class ChatMessage(BaseModel):
     message: str
 
+class ChatMessageEnhanced(BaseModel):
+    message: str
+    session_id: str
+
 class ChatResponse(BaseModel):
     message: str
     response: str
     timestamp: datetime
+
+# Session schemas
+class SessionCreate(BaseModel):
+    name: str
+
+class SessionUpdate(BaseModel):
+    name: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class SessionResponse(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    last_message_at: Optional[datetime]
+    message_count: int
+    is_active: bool
+
+class ConversationResponse(BaseModel):
+    id: int
+    message: str
+    response: str
+    timestamp: datetime
+    session_id: str
+    session_name: str
 
 # Check-in schemas
 class DailyCheckInCreate(BaseModel):
@@ -156,6 +184,7 @@ class ProactiveMessageResponse(BaseModel):
 class ProactiveMessage(ProactiveMessageBase):
     id: int
     user_id: int
+    session_id: Optional[str] = None
     sent_at: Optional[datetime] = None
     user_responded: bool
     response_content: Optional[str] = None

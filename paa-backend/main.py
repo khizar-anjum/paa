@@ -9,6 +9,7 @@ from collections import defaultdict
 import os
 import logging
 import time
+import uuid
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base, SessionLocal
@@ -623,7 +624,7 @@ Guidelines:
 # Enhanced Chat endpoint with Hybrid Pipeline Architecture
 @app.post("/chat/enhanced", response_model=schemas.ChatResponse)
 async def enhanced_chat(
-    message: schemas.ChatMessage,
+    message: schemas.ChatMessageEnhanced,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -638,11 +639,19 @@ async def enhanced_chat(
     execution_id = debug_logger.start_pipeline_execution(current_user.id, message.message)
     
     try:
+        # Get session information
+        chat_session = db.query(models.ChatSession).filter(
+            models.ChatSession.id == message.session_id,
+            models.ChatSession.user_id == current_user.id
+        ).first()
+        
+        if not chat_session:
+            raise HTTPException(status_code=404, detail="Session not found")
         # 1. Intent Classification
         intent = nlp_intent_classifier.classify(message.message)
         
-        # 2. RAG Context Retrieval
-        context = rag_system.retrieve_context(message.message, intent, current_user.id)
+        # 2. RAG Context Retrieval (session-aware)
+        context = rag_system.retrieve_context(message.message, intent, current_user.id, session_id=message.session_id)
         
         # Get user profile if available
         user_data = {}
@@ -676,6 +685,8 @@ async def enhanced_chat(
         # 5. Store conversation with metadata
         conversation = models.Conversation(
             user_id=current_user.id,
+            session_id=message.session_id,
+            session_name=chat_session.name,
             message=message.message,
             response=ai_response.message,
             timestamp=time_service.now()
@@ -683,6 +694,10 @@ async def enhanced_chat(
         db.add(conversation)
         db.commit()
         db.refresh(conversation)
+        
+        # Update session's last_message_at
+        chat_session.last_message_at = time_service.now()
+        db.commit()
         
         # 6. Embed the conversation for future semantic search
         try:
@@ -706,6 +721,8 @@ async def enhanced_chat(
         
         conversation = models.Conversation(
             user_id=current_user.id,
+            session_id=message.session_id,
+            session_name=chat_session.name if 'chat_session' in locals() else "General",
             message=message.message,
             response=fallback_response,
             timestamp=time_service.now()
@@ -767,14 +784,25 @@ def generate_demo_response(message: str, habits: list, moods: list, commitment_a
     return base_response
 
 # Get chat history endpoint
-@app.get("/chat/history")
+@app.get("/chat/history/{session_id}")
 def get_chat_history(
-    limit: int = 20,
+    session_id: str,
+    limit: int = 50,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Verify session belongs to user
+    chat_session = db.query(models.ChatSession).filter(
+        models.ChatSession.id == session_id,
+        models.ChatSession.user_id == current_user.id
+    ).first()
+    
+    if not chat_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
     conversations = db.query(models.Conversation).filter(
-        models.Conversation.user_id == current_user.id
+        models.Conversation.user_id == current_user.id,
+        models.Conversation.session_id == session_id
     ).order_by(models.Conversation.timestamp.desc()).limit(limit).all()
     
     return [
@@ -1174,6 +1202,232 @@ def update_scheduled_prompt(
     db.commit()
     db.refresh(prompt)
     return prompt
+
+
+# Session Management endpoints
+@app.post("/sessions", response_model=schemas.SessionResponse)
+async def create_session(
+    session_data: schemas.SessionCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new chat session"""
+    session_id = str(uuid.uuid4())
+    
+    # Create session
+    chat_session = models.ChatSession(
+        id=session_id,
+        user_id=current_user.id,
+        name=session_data.name,
+        created_at=time_service.now()
+    )
+    db.add(chat_session)
+    db.commit()
+    db.refresh(chat_session)
+    
+    # Get message count (will be 0 for new session)
+    message_count = db.query(models.Conversation).filter(
+        models.Conversation.user_id == current_user.id,
+        models.Conversation.session_id == session_id
+    ).count()
+    
+    return schemas.SessionResponse(
+        id=chat_session.id,
+        name=chat_session.name,
+        created_at=chat_session.created_at,
+        last_message_at=chat_session.last_message_at,
+        message_count=message_count,
+        is_active=chat_session.is_active
+    )
+
+
+@app.post("/sessions/auto", response_model=schemas.SessionResponse)
+async def create_session_auto(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new chat session with auto-generated name"""
+    session_id = str(uuid.uuid4())
+    
+    # Create session with temporary name
+    chat_session = models.ChatSession(
+        id=session_id,
+        user_id=current_user.id,
+        name="New Chat",
+        created_at=time_service.now()
+    )
+    db.add(chat_session)
+    db.commit()
+    db.refresh(chat_session)
+    
+    return schemas.SessionResponse(
+        id=chat_session.id,
+        name=chat_session.name,
+        created_at=chat_session.created_at,
+        last_message_at=chat_session.last_message_at,
+        message_count=0,
+        is_active=chat_session.is_active
+    )
+
+
+@app.put("/sessions/{session_id}/generate-name")
+async def generate_session_name(
+    session_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate and update session name based on conversation content"""
+    from services.llm_processor import llm_processor
+    
+    session = db.query(models.ChatSession).filter(
+        models.ChatSession.id == session_id,
+        models.ChatSession.user_id == current_user.id
+    ).first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Get first few messages from this session
+    messages = db.query(models.Conversation).filter(
+        models.Conversation.user_id == current_user.id,
+        models.Conversation.session_id == session_id
+    ).order_by(models.Conversation.timestamp.asc()).limit(6).all()
+    
+    if not messages:
+        return {"message": "No messages to generate name from"}
+    
+    # Generate name using LLM
+    new_name = llm_processor.generate_session_name(messages)
+    
+    # Update session name
+    session.name = new_name
+    db.commit()
+    
+    return {"message": f"Session renamed to: {new_name}", "name": new_name}
+
+
+def get_active_session_id(user_id: int, db: Session) -> Optional[str]:
+    """Get the most recent session ID for a user (for proactive messages)"""
+    session = db.query(models.ChatSession).filter(
+        models.ChatSession.user_id == user_id,
+        models.ChatSession.is_active == True
+    ).order_by(models.ChatSession.last_message_at.desc().nullslast()).first()
+    
+    return session.id if session else None
+
+
+@app.get("/sessions", response_model=List[schemas.SessionResponse])
+async def get_sessions(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all sessions for current user"""
+    sessions = db.query(models.ChatSession).filter(
+        models.ChatSession.user_id == current_user.id
+    ).order_by(models.ChatSession.last_message_at.desc().nullslast()).all()
+    
+    response = []
+    for session in sessions:
+        # Get message count for each session
+        message_count = db.query(models.Conversation).filter(
+            models.Conversation.user_id == current_user.id,
+            models.Conversation.session_id == session.id
+        ).count()
+        
+        response.append(schemas.SessionResponse(
+            id=session.id,
+            name=session.name,
+            created_at=session.created_at,
+            last_message_at=session.last_message_at,
+            message_count=message_count,
+            is_active=session.is_active
+        ))
+    
+    return response
+
+
+@app.put("/sessions/{session_id}", response_model=schemas.SessionResponse)
+async def update_session(
+    session_id: str,
+    session_data: schemas.SessionUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update session name or archive"""
+    session = db.query(models.ChatSession).filter(
+        models.ChatSession.id == session_id,
+        models.ChatSession.user_id == current_user.id
+    ).first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session_data.name is not None:
+        session.name = session_data.name
+    if session_data.is_active is not None:
+        session.is_active = session_data.is_active
+    
+    db.commit()
+    db.refresh(session)
+    
+    # Get message count
+    message_count = db.query(models.Conversation).filter(
+        models.Conversation.user_id == current_user.id,
+        models.Conversation.session_id == session_id
+    ).count()
+    
+    return schemas.SessionResponse(
+        id=session.id,
+        name=session.name,
+        created_at=session.created_at,
+        last_message_at=session.last_message_at,
+        message_count=message_count,
+        is_active=session.is_active
+    )
+
+
+@app.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a session and all its conversations"""
+    session = db.query(models.ChatSession).filter(
+        models.ChatSession.id == session_id,
+        models.ChatSession.user_id == current_user.id
+    ).first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Delete all conversations in this session
+    conversations = db.query(models.Conversation).filter(
+        models.Conversation.user_id == current_user.id,
+        models.Conversation.session_id == session_id
+    ).all()
+    
+    # Delete from vector store
+    if conversations:
+        try:
+            for conv in conversations:
+                vector_store.conversations_collection.delete(
+                    where={"conversation_id": str(conv.id)}
+                )
+        except Exception as e:
+            debug_logger.log(f"Warning: Could not delete from vector store: {e}")
+    
+    # Delete conversations from database
+    db.query(models.Conversation).filter(
+        models.Conversation.user_id == current_user.id,
+        models.Conversation.session_id == session_id
+    ).delete()
+    
+    # Delete the session
+    db.delete(session)
+    db.commit()
+    
+    return {"detail": "Session deleted successfully"}
 
 
 # Analytics endpoints

@@ -185,43 +185,49 @@ Habit (1) ←→ (many) HabitLog [ENHANCED WITH VECTOR CONTEXT]
 - `GET /analytics/mood` - Mood trend analytics with pattern recognition
 - `GET /analytics/overview` - Dashboard overview statistics with context
 
-## Vector Database Architecture
+## Session-Enhanced Vector Database Architecture
 
-### ChromaDB Collections
+### ChromaDB Collections (Enhanced with Session Metadata)
 ```python
 conversations_collection:
     - Documents: Combined user message + AI response
-    - Metadata: user_id, conversation_id, timestamp, individual messages
-    - Usage: Semantic conversation history search
+    - Metadata: user_id, conversation_id, session_id, session_name, timestamp, individual messages
+    - Usage: Session-scoped semantic conversation history search
 
 habits_collection:
     - Documents: Habit name + description + completion context
     - Metadata: user_id, habit_id, name, frequency, status
-    - Usage: Related habit discovery and context
+    - Usage: Global related habit discovery and context (shared across sessions)
 
 people_collection:
     - Documents: Person name + relationship + description
     - Metadata: user_id, person_id, name, relationship, pronouns
-    - Usage: People recognition and relationship context
+    - Usage: Global people recognition and relationship context (shared across sessions)
 
 commitments_collection:
     - Documents: Task description + deadline + priority + status
     - Metadata: user_id, commitment_id, status, priority, deadline
-    - Usage: Similar commitment pattern matching
+    - Usage: Global similar commitment pattern matching (shared across sessions)
 ```
 
-### Embedding Pipeline
+### Session-Aware Embedding Pipeline
 ```python
 # Real-time embedding (integrated into endpoints)
-- New conversations: Automatically embedded after creation
-- New habits: Embedded when created via POST /habits
-- New people: Embedded when created via POST /people
-- New commitments: Embedded via action processor
+- New conversations: Automatically embedded after creation with session metadata
+- New habits: Embedded when created via POST /habits (global context)
+- New people: Embedded when created via POST /people (global context)
+- New commitments: Embedded via action processor (global context)
+
+# Session Management
+- Session metadata included in conversation embeddings
+- Session-scoped search for conversations within current session
+- Global search for habits, people, commitments across all sessions
 
 # Batch embedding (one-time setup)
 - embed_existing_data.py: Processes all existing data
 - Handles schema mismatches gracefully
 - Provides embedding status feedback
+- Migrates existing conversations to default session if needed
 ```
 
 ## Advanced Features

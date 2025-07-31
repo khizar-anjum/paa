@@ -9,6 +9,7 @@ export interface ProactiveMessage {
   message_type: string;
   content: string;
   related_commitment_id?: number;
+  session_id?: string;
   scheduled_for?: string;
   sent_at?: string;
   user_responded: boolean;

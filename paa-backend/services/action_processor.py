@@ -752,11 +752,29 @@ class ActionProcessor:
         scheduled_for: datetime
     ):
         """Helper to create proactive messages"""
+        # Get the most recent active session for this user
+        # First try to get session with messages (last_message_at not null)
+        session = db.query(models.ChatSession).filter(
+            models.ChatSession.user_id == user_id,
+            models.ChatSession.is_active == True,
+            models.ChatSession.last_message_at.isnot(None)
+        ).order_by(models.ChatSession.last_message_at.desc()).first()
+        
+        # If no session with messages, get the most recent created session
+        if not session:
+            session = db.query(models.ChatSession).filter(
+                models.ChatSession.user_id == user_id,
+                models.ChatSession.is_active == True
+            ).order_by(models.ChatSession.created_at.desc()).first()
+        
+        session_id = session.id if session else None
+        
         message = models.ProactiveMessage(
             user_id=user_id,
             message_type=message_type,
             content=content,
             related_commitment_id=related_commitment_id,
+            session_id=session_id,
             scheduled_for=scheduled_for,
             user_responded=False
         )

@@ -31,7 +31,8 @@ class HybridRAGSystem:
         self,
         message: str,
         intent: MessageIntent,
-        user_id: int
+        user_id: int,
+        session_id: Optional[str] = None
     ) -> EnhancedContext:
         """
         Multi-strategy retrieval based on intent.
@@ -57,7 +58,7 @@ class HybridRAGSystem:
         
         try:
             # 1. Semantic search across relevant collections (NEW)
-            context.semantic_matches = self._get_semantic_matches(message, intent, user_id)
+            context.semantic_matches = self._get_semantic_matches(message, intent, user_id, session_id)
             
             # 2. Recent conversations (ENHANCED with semantic search)
             if 'recent_conversations' in intent.context_needed:
@@ -118,13 +119,13 @@ class HybridRAGSystem:
         
         return context
     
-    def _get_semantic_matches(self, message: str, intent: MessageIntent, user_id: int) -> List[Dict[str, Any]]:
+    def _get_semantic_matches(self, message: str, intent: MessageIntent, user_id: int, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get semantic matches across all collections based on intent"""
         semantic_matches = []
         
-        # Search conversations for semantic similarity
+        # Search conversations for semantic similarity (session-scoped)
         if intent.primary_intent in ['general_chat', 'information_query', 'mood_reflection']:
-            conv_matches = self.vector_store.search_conversations(message, user_id, limit=3)
+            conv_matches = self.vector_store.search_conversations(message, user_id, session_id=session_id, limit=3)
             for match in conv_matches:
                 if match['similarity_score'] > 0.7:  # High similarity threshold
                     semantic_matches.append({

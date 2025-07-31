@@ -90,7 +90,7 @@ export default function TimeDebugPanel() {
   };
 
   return (
-    <div className="fixed top-4 right-4 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+    <div className="bg-white border border-gray-200 rounded-lg shadow-sm w-full">
       <div className="p-3">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
@@ -119,7 +119,7 @@ export default function TimeDebugPanel() {
       </div>
 
       {isExpanded && (
-        <div className="border-t border-gray-200 p-3 w-80">
+        <div className="border-t border-gray-200 p-3 bg-white rounded-b-lg shadow-lg w-full">
           <div className="space-y-3">
             {/* Current Time Display */}
             {timeStatus && (

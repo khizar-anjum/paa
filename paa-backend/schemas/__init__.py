@@ -9,7 +9,9 @@ from .base import (
     # Habit schemas
     HabitBase, HabitCreate, Habit,
     # Chat schemas
-    ChatMessage, ChatResponse,
+    ChatMessage, ChatMessageEnhanced, ChatResponse,
+    # Session schemas
+    SessionCreate, SessionUpdate, SessionResponse, ConversationResponse,
     # Check-in schemas
     DailyCheckInCreate, DailyCheckIn,
     # Person schemas
@@ -47,7 +49,8 @@ __all__ = [
     # Base schemas
     'UserBase', 'UserCreate', 'User',
     'HabitBase', 'HabitCreate', 'Habit',
-    'ChatMessage', 'ChatResponse',
+    'ChatMessage', 'ChatMessageEnhanced', 'ChatResponse',
+    'SessionCreate', 'SessionUpdate', 'SessionResponse', 'ConversationResponse',
     'DailyCheckInCreate', 'DailyCheckIn',
     'PersonBase', 'PersonCreate', 'PersonUpdate', 'Person',
     'UserProfileBase', 'UserProfileCreate', 'UserProfileUpdate', 'UserProfile',

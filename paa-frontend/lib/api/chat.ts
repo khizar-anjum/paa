@@ -3,6 +3,12 @@ import { debugLogger } from '../debug-utils';
 
 export interface ChatMessage {
   message: string;
+  session_id?: string;
+}
+
+export interface ChatMessageEnhanced {
+  message: string;
+  session_id: string;
 }
 
 export interface ChatResponse {
@@ -16,13 +22,15 @@ export interface ChatHistory {
   message: string;
   response: string;
   timestamp: string;
+  session_id: string;
+  session_name: string;
 }
 
 export const chatApi = {
-  sendMessage: async (message: string): Promise<ChatResponse> => {
+  sendMessage: async (message: string, sessionId: string): Promise<ChatResponse> => {
     const startTime = Date.now();
     const url = '/chat/enhanced';
-    const requestData = { message };
+    const requestData = { message, session_id: sessionId };
     
     const callId = debugLogger.logApiCall('POST', url, requestData);
     
@@ -39,9 +47,9 @@ export const chatApi = {
     }
   },
 
-  getHistory: async (limit: number = 20): Promise<ChatHistory[]> => {
+  getHistory: async (sessionId: string, limit: number = 50): Promise<ChatHistory[]> => {
     const startTime = Date.now();
-    const url = `/chat/history?limit=${limit}`;
+    const url = `/chat/history/${sessionId}?limit=${limit}`;
     
     const callId = debugLogger.logApiCall('GET', url);
     

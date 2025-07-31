@@ -30,6 +30,7 @@ class User(Base):
     commitments = relationship("Commitment", back_populates="user")
     proactive_messages = relationship("ProactiveMessage", back_populates="user")
     scheduled_prompts = relationship("ScheduledPrompt", back_populates="user")
+    chat_sessions = relationship("ChatSession", back_populates="user")
 
 class Habit(Base):
     __tablename__ = "habits"
@@ -59,6 +60,8 @@ class Conversation(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
+    session_id = Column(String, nullable=False, index=True)  # UUID for session
+    session_name = Column(String, nullable=False)  # User-friendly name
     message = Column(Text, nullable=False)
     response = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
@@ -129,6 +132,7 @@ class ProactiveMessage(Base):
     message_type = Column(String)  # commitment_reminder, scheduled_prompt, escalation
     content = Column(Text, nullable=False)
     related_commitment_id = Column(Integer, ForeignKey("commitments.id"))
+    session_id = Column(String, nullable=True)  # Target session for the message
     scheduled_for = Column(DateTime)
     sent_at = Column(DateTime)
     user_responded = Column(Boolean, default=False)
@@ -151,6 +155,19 @@ class ScheduledPrompt(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="scheduled_prompts")
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+    
+    id = Column(String, primary_key=True)  # UUID
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_message_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="chat_sessions")
 
 # Create tables
 Base.metadata.create_all(bind=engine)

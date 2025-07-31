@@ -59,6 +59,7 @@ class VectorStore:
                 metadatas=[{
                     "user_id": conversation.user_id,
                     "conversation_id": conversation.id,
+                    "session_id": conversation.session_id,
                     "timestamp": conversation.timestamp.isoformat(),
                     "user_message": conversation.message,
                     "ai_response": conversation.response
@@ -170,6 +171,7 @@ class VectorStore:
         self,
         query: str,
         user_id: int,
+        session_id: Optional[str] = None,
         limit: int = 5
     ) -> List[Dict[str, Any]]:
         """Search for similar conversations"""
@@ -179,9 +181,14 @@ class VectorStore:
             debug_logger.log_vector_search_start("conversations", query, user_id, limit)
         
         try:
+            # Build where clause
+            where_clause = {"user_id": {"$eq": user_id}}
+            if session_id:
+                where_clause["session_id"] = {"$eq": session_id}
+            
             results = self.conversations_collection.query(
                 query_texts=[query],
-                where={"user_id": {"$eq": user_id}},
+                where=where_clause,
                 n_results=limit
             )
             

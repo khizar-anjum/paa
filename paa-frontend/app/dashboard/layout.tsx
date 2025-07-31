@@ -66,6 +66,11 @@ export default function DashboardLayout({
         </nav>
 
         <div className="absolute bottom-0 w-full p-4">
+          {/* Time Debug Panel */}
+          <div className="mb-4">
+            <TimeDebugPanel />
+          </div>
+          
           <div className="bg-gray-100 rounded-lg p-3 mb-4">
             <p className="text-sm font-medium text-gray-700">{user.username}</p>
             <p className="text-xs text-gray-500">{user.email}</p>
@@ -108,9 +113,6 @@ export default function DashboardLayout({
           <PersistentChatPanel />
         </div>
       </div>
-      
-      {/* Time Debug Panel - Fixed position */}
-      <TimeDebugPanel />
     </div>
   );
 }
