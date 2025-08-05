@@ -59,33 +59,37 @@ export function PageOverlay({ title, children, onClose, onOpenSidebar }: PageOve
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-white z-40 flex flex-col animate-in fade-in duration-300">
+    <div className="fixed inset-0 lg:left-16 bg-white z-50 flex flex-col animate-in fade-in duration-300">
       {/* Header with hamburger menu and close button */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center gap-4">
-          {onOpenSidebar && (
+      <div className="border-b border-gray-200 bg-white shadow-sm">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {onOpenSidebar && (
+                <button
+                  onClick={onOpenSidebar}
+                  className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
+                  aria-label="Open navigation menu"
+                >
+                  <Menu className="h-6 w-6 text-gray-600" />
+                </button>
+              )}
+              <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+            </div>
             <button
-              onClick={onOpenSidebar}
+              onClick={handleClose}
               className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-              aria-label="Open navigation menu"
+              aria-label="Close and return to chat"
             >
-              <Menu className="h-6 w-6 text-gray-600" />
+              <X className="h-6 w-6 text-gray-600" />
             </button>
-          )}
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+          </div>
         </div>
-        <button
-          onClick={handleClose}
-          className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-          aria-label="Close and return to chat"
-        >
-          <X className="h-6 w-6 text-gray-600" />
-        </button>
       </div>
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-4xl mx-auto px-6 py-8">
           {children}
         </div>
       </div>

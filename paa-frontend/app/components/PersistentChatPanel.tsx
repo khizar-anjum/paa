@@ -264,14 +264,15 @@ export function PersistentChatPanel({ onOpenSidebar }: PersistentChatPanelProps)
   return (
     <div className="h-full w-full flex flex-col">
       {/* Header with History and New Chat buttons */}
-      <div className="border-b border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between mb-3">
           <div className="flex items-center">
-            {/* Hamburger Menu Button */}
+            {/* Hamburger Menu Button - Only show on small screens since ExpandableSidebar handles it on large screens */}
             {onOpenSidebar && (
               <button
                 onClick={onOpenSidebar}
-                className="p-2 rounded-md hover:bg-gray-100 transition-colors mr-3"
+                className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors mr-3"
                 aria-label="Open navigation menu"
               >
                 <Menu className="h-5 w-5 text-gray-600" />
@@ -322,12 +323,14 @@ export function PersistentChatPanel({ onOpenSidebar }: PersistentChatPanelProps)
             </button>
           </div>
         </div>
-        
-        <p className="text-sm text-gray-500">Your proactive and persistent companion</p>
+          
+          <p className="text-sm text-gray-500">Your proactive and persistent companion</p>
+        </div>
       </div>
 
       {/* Messages or History Panel */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
         {showHistoryPanel ? (
           // History Panel
           <div className="h-full">
@@ -564,11 +567,13 @@ export function PersistentChatPanel({ onOpenSidebar }: PersistentChatPanelProps)
           </>
         )}
         <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Message Input - Only show when not in history mode */}
       {!showHistoryPanel && (
-        <div className="border-t border-gray-200 p-4">
+        <div className="border-t border-gray-200">
+          <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex space-x-2">
             <textarea
               value={input}
@@ -602,6 +607,7 @@ export function PersistentChatPanel({ onOpenSidebar }: PersistentChatPanelProps)
               No active session - please wait while we initialize...
             </p>
           )}
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, X, User, Users, BarChart3, MessageSquare, LogOut, CheckSquare } from 'lucide-react';
+import { Menu, X, User, Users, BarChart3, MessageSquare, LogOut, Target, Settings } from 'lucide-react';
 import Link from 'next/link';
 import TimeDebugPanel from './TimeDebugPanel';
 
@@ -13,10 +13,10 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Chat', href: '/dashboard', icon: MessageSquare },
-  { name: 'Your Profile', href: '/dashboard/profile', icon: User },
+  { name: 'Dashboard (Chat)', href: '/dashboard', icon: MessageSquare },
+  { name: 'Profile', href: '/dashboard/profile', icon: User },
   { name: 'People', href: '/dashboard/people', icon: Users },
-  { name: 'Commitments', href: '/dashboard/commitments', icon: CheckSquare },
+  { name: 'Commitments', href: '/dashboard/commitments', icon: Target },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
 ];
 
@@ -82,16 +82,16 @@ export function CollapsibleSidebar({ currentPath, user, onLogout, isOpen, onClos
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop - only show on small screens */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-50 transition-opacity"
+        className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-[60] transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Sidebar */}
+      {/* Sidebar - only show on small screens */}
       <div
-        className="fixed left-0 top-0 h-full w-80 bg-white shadow-xl z-50 flex flex-col animate-in slide-in-from-left duration-300"
+        className="lg:hidden fixed left-0 top-0 h-full w-80 bg-white shadow-xl z-[70] flex flex-col animate-in slide-in-from-left duration-300"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">

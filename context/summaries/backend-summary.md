@@ -160,7 +160,7 @@ class Message(Base):
   }
   ```
 
-- `GET /analytics/mood?days={days}` - Mood analytics (still available)
+- `GET /analytics/mood?days={days}` - Mood analytics (still available but unused in frontend)
 
 ### Chat/Conversations
 - `GET /conversations` - List user conversations
@@ -284,6 +284,33 @@ class OverviewAnalytics(BaseModel):
     total_conversations: int
 ```
 
+### People Schemas
+```python
+class PersonBase(BaseModel):
+    name: str
+    pronouns: Optional[str] = None
+    how_you_know_them: Optional[str] = None
+    description: Optional[str] = None
+    
+class PersonCreate(PersonBase):
+    pass
+    
+class PersonUpdate(BaseModel):
+    name: Optional[str] = None
+    pronouns: Optional[str] = None
+    how_you_know_them: Optional[str] = None
+    description: Optional[str] = None
+    
+class Person(PersonBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+```
+
 ## Database Migration
 
 ### Migration Script (`migrate_habits_to_commitments.py`)
@@ -349,15 +376,45 @@ app.add_middleware(
 - Detailed error messages in development
 - Generic messages in production
 
-## Testing Endpoints
-- Health check: `GET /health`
-- Database connection: `GET /db-check`
+## Security Features
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: Bcrypt for secure password storage
+- **User Isolation**: All data properly scoped to authenticated users
+- **Input Validation**: Pydantic schemas prevent malformed data
+- **SQL Injection Protection**: SQLAlchemy ORM prevents injection attacks
+
+## Performance Optimizations
+- **Database Indexing**: Proper indexes on foreign keys and search fields
+- **Query Optimization**: Efficient queries with minimal N+1 problems
+- **Connection Pooling**: SQLAlchemy connection pool management
+- **Async Support**: FastAPI async capabilities for I/O operations
+
+## Testing & Development
+- **Health Check**: `GET /health` - Application health status
+- **Database Check**: `GET /db-check` - Database connectivity
+- **API Documentation**: Auto-generated OpenAPI/Swagger docs at `/docs`
+- **Development CORS**: Configured for local frontend development
+
+## Data Relationships
+```
+User (1) ──────── (M) Commitment
+ │                     │
+ │                     └── (M) CommitmentCompletion
+ │
+ ├── (M) Person
+ │
+ └── (M) Conversation ── (M) Message
+```
 
 ## Current Status
-✅ Unified commitment system implemented
-✅ Chat processing with LLM integration
-✅ Analytics endpoints operational
-✅ People management CRUD complete
-✅ JWT authentication working
-✅ Database migration script ready
-✅ All endpoints tested and functional
+✅ Unified commitment system implemented  
+✅ Chat processing with LLM integration  
+✅ Analytics endpoints operational with proper field names  
+✅ People management CRUD complete  
+✅ JWT authentication working  
+✅ Database migration script ready  
+✅ All endpoints tested and functional  
+✅ Proper error handling and validation  
+✅ Security best practices implemented  
+✅ API documentation available  
+✅ Performance optimizations in place

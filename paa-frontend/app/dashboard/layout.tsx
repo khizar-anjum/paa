@@ -6,6 +6,7 @@ import { LogOut, Loader2 } from 'lucide-react';
 import { useEffect, useState, useCallback, createContext, useContext } from 'react';
 import { PersistentChatPanel } from '@/app/components/PersistentChatPanel';
 import { CollapsibleSidebar } from '@/app/components/CollapsibleSidebar';
+import { ExpandableSidebar } from '@/app/components/ExpandableSidebar';
 
 // Create context for sidebar functionality
 const SidebarContext = createContext<{
@@ -85,37 +86,46 @@ export default function DashboardLayout({
   
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Collapsible Sidebar */}
-      <CollapsibleSidebar 
-        currentPath={pathname}
-        user={user}
-        onLogout={logout}
-        isOpen={isSidebarOpen}
-        onClose={closeSidebar}
-      />
+    <SidebarContext.Provider value={{ openSidebar }}>
+      <div className="min-h-screen bg-white">
+        {/* Expandable Sidebar - Always visible on large screens */}
+        <ExpandableSidebar 
+          currentPath={pathname}
+          user={user}
+          onLogout={logout}
+        />
 
-      {/* Main content area */}
-      {isShowingChat ? (
-        // Full-width chat interface for dashboard root
-        <div className="h-screen">
-          <PersistentChatPanel onOpenSidebar={openSidebar} />
+        {/* Collapsible Sidebar - Only on small screens */}
+        <CollapsibleSidebar 
+          currentPath={pathname}
+          user={user}
+          onLogout={logout}
+          isOpen={isSidebarOpen}
+          onClose={closeSidebar}
+        />
+
+        {/* Main content area - with left margin on large screens to account for ExpandableSidebar */}
+        <div className="lg:ml-16">
+          {isShowingChat ? (
+            // Full-width chat interface for dashboard root
+            <div className="h-screen">
+              <PersistentChatPanel onOpenSidebar={openSidebar} />
+            </div>
+          ) : isOverlayPage ? (
+            // Full-screen overlay for profile, people, analytics pages - PageOverlay component handles the overlay structure
+            <div className="h-screen">
+              {children}
+            </div>
+          ) : (
+            // Fallback for other pages - maintain some layout
+            <div className="min-h-screen pt-16">
+              <main className="container mx-auto px-4 py-8">
+                {children}
+              </main>
+            </div>
+          )}
         </div>
-      ) : isOverlayPage ? (
-        // Full-screen overlay for profile, people, analytics pages - PageOverlay component handles the overlay structure
-        <SidebarContext.Provider value={{ openSidebar }}>
-          <div className="h-screen">
-            {children}
-          </div>
-        </SidebarContext.Provider>
-      ) : (
-        // Fallback for other pages - maintain some layout
-        <div className="min-h-screen pt-16">
-          <main className="container mx-auto px-4 py-8">
-            {children}
-          </main>
-        </div>
-      )}
-    </div>
+      </div>
+    </SidebarContext.Provider>
   );
 }
