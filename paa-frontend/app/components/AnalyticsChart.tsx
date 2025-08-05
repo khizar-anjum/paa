@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 interface AnalyticsChartProps {
   data: any[];
-  type: 'mood' | 'habits';
+  type: 'mood' | 'commitments';
   title: string;
 }
 
@@ -50,12 +50,12 @@ export function AnalyticsChart({ data, type, title }: AnalyticsChartProps) {
       </div>
     );
   } else {
-    // Habits chart - show completion rate
-    const chartData = data.map(habit => ({
-      name: habit.habit_name.length > 15 
-        ? habit.habit_name.substring(0, 15) + '...' 
-        : habit.habit_name,
-      completion_rate: habit.completion_rate
+    // Commitments chart - show completion rate
+    const chartData = data.map(commitment => ({
+      name: commitment.commitment_name.length > 15 
+        ? commitment.commitment_name.substring(0, 15) + '...' 
+        : commitment.commitment_name,
+      completion_rate: commitment.completion_rate
     }));
 
     return (

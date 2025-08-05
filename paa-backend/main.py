@@ -1526,16 +1526,29 @@ def get_overview_analytics(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Recurring commitments overview (unified system)
-    total_habits = db.query(func.count(models.Commitment.id)).filter(
+    # Get all commitments counts
+    total_commitments = db.query(func.count(models.Commitment.id)).filter(
         models.Commitment.user_id == current_user.id,
-        models.Commitment.recurrence_pattern != "none",
-        models.Commitment.status == "active"
+        models.Commitment.status.in_(["active", "completed"])
     ).scalar()
     
-    # Completed today
+    recurring_commitments = db.query(func.count(models.Commitment.id)).filter(
+        models.Commitment.user_id == current_user.id,
+        models.Commitment.recurrence_pattern != "none",
+        models.Commitment.status.in_(["active", "completed"])
+    ).scalar()
+    
+    one_time_commitments = db.query(func.count(models.Commitment.id)).filter(
+        models.Commitment.user_id == current_user.id,
+        models.Commitment.recurrence_pattern == "none",
+        models.Commitment.status.in_(["active", "completed"])
+    ).scalar()
+    
+    # Completed today (both recurring and one-time)
     today = time_service.now().date()
-    completed_today = db.query(
+    
+    # Count recurring commitments completed today
+    recurring_completed_today = db.query(
         func.count(func.distinct(models.CommitmentCompletion.commitment_id))
     ).join(models.Commitment).filter(
         models.Commitment.user_id == current_user.id,
@@ -1543,6 +1556,18 @@ def get_overview_analytics(
         models.CommitmentCompletion.completion_date == today,
         models.CommitmentCompletion.skipped == False
     ).scalar()
+    
+    # Count one-time commitments completed today
+    one_time_completed_today = db.query(
+        func.count(func.distinct(models.CommitmentCompletion.commitment_id))
+    ).join(models.Commitment).filter(
+        models.Commitment.user_id == current_user.id,
+        models.Commitment.recurrence_pattern == "none",
+        models.CommitmentCompletion.completion_date == today,
+        models.CommitmentCompletion.skipped == False
+    ).scalar()
+    
+    completed_today = recurring_completed_today + one_time_completed_today
     
     # Current mood (today's latest checkin)
     today_checkin = db.query(models.DailyCheckIn).filter(
@@ -1576,15 +1601,82 @@ def get_overview_analytics(
         check_date -= timedelta(days=1)
     
     return {
-        "total_habits": total_habits,
+        "total_commitments": total_commitments,
+        "recurring_commitments": recurring_commitments,
+        "one_time_commitments": one_time_commitments,
         "completed_today": completed_today,
-        "completion_rate": round((completed_today / total_habits) * 100, 1) if total_habits > 0 else 0,
+        "completion_rate": round((completed_today / total_commitments) * 100, 1) if total_commitments > 0 else 0,
         "current_mood": today_checkin.mood if today_checkin else None,
         "longest_streak": longest_streak,
         "total_conversations": db.query(func.count(models.Conversation.id)).filter(
             models.Conversation.user_id == current_user.id
-        ).scalar()
+        ).scalar(),
+        # Keep old field for backward compatibility
+        "total_habits": recurring_commitments
     }
+
+@app.get("/analytics/commitments")
+def get_commitments_analytics(
+    days: int = 30,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get analytics for commitments over a specified time period"""
+    # Get date range
+    end_date = time_service.now().date()
+    start_date = end_date - timedelta(days=days)
+    
+    # Get all active commitments for the user
+    commitments = db.query(models.Commitment).filter(
+        models.Commitment.user_id == current_user.id,
+        models.Commitment.status.in_(["active", "completed"])
+    ).all()
+    
+    analytics_data = []
+    
+    for commitment in commitments:
+        # Get completions for this commitment in the date range
+        completions = db.query(models.CommitmentCompletion).filter(
+            models.CommitmentCompletion.commitment_id == commitment.id,
+            models.CommitmentCompletion.completion_date >= start_date,
+            models.CommitmentCompletion.completion_date <= end_date,
+            models.CommitmentCompletion.skipped == False
+        ).all()
+        
+        # Create daily data array
+        daily_data = []
+        current_date = start_date
+        while current_date <= end_date:
+            completed_count = len([c for c in completions if c.completion_date == current_date])
+            daily_data.append({
+                "date": current_date.isoformat(),
+                "completed": completed_count
+            })
+            current_date += timedelta(days=1)
+        
+        # Calculate completion rate
+        if commitment.recurrence_pattern != "none":
+            # For recurring commitments, calculate based on expected vs actual completions
+            total_expected_days = days
+            total_completions = len(completions)
+            completion_rate = (total_completions / total_expected_days) * 100 if total_expected_days > 0 else 0
+        else:
+            # For one-time commitments, it's either 0% or 100%
+            total_completions = len(completions)
+            completion_rate = 100.0 if total_completions > 0 else 0.0
+        
+        analytics_data.append({
+            "commitment_id": commitment.id,
+            "commitment_name": commitment.task_description,
+            "completion_rate": round(completion_rate, 1),
+            "total_completions": len(completions),
+            "total_days": days,
+            "recurrence_pattern": commitment.recurrence_pattern,
+            "is_recurring": commitment.recurrence_pattern != "none",
+            "daily_data": daily_data
+        })
+    
+    return analytics_data
 
 # Debug API endpoints for time acceleration testing
 @app.post("/debug/time/start")

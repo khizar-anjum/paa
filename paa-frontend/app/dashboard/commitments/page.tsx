@@ -10,8 +10,11 @@ import CreateCommitmentModal from '@/app/components/CreateCommitmentModal';
 import { toast } from 'sonner';
 import { useDataRefresh } from '@/hooks/useDataRefresh';
 import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
+import { PageOverlay } from '@/app/components/PageOverlay';
+import { useSidebar } from '../layout';
 
 export default function CommitmentsPage() {
+  const { openSidebar } = useSidebar();
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,25 +108,22 @@ export default function CommitmentsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
-      </div>
+      <PageOverlay title="Commitments" onOpenSidebar={openSidebar}>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+        </div>
+      </PageOverlay>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <PageOverlay title="Commitments" onOpenSidebar={openSidebar}>
+      <div className="space-y-6">
+      {/* Actions */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <CheckSquare className="h-7 w-7 text-blue-600" />
-            Commitments
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Track and manage your personal commitments
-          </p>
-        </div>
+        <p className="text-gray-600">
+          Track and manage your personal commitments
+        </p>
         
         <div className="flex gap-2">
           <button
@@ -291,6 +291,7 @@ export default function CommitmentsPage() {
         onClose={() => setEditingCommitment(null)}
         onUpdate={handleCommitmentUpdate}
       />
-    </div>
+      </div>
+    </PageOverlay>
   );
 }

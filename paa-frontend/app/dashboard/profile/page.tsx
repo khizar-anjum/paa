@@ -8,8 +8,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useDataRefresh } from '@/hooks/useDataRefresh';
 import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
+import { PageOverlay } from '@/app/components/PageOverlay';
+import { useSidebar } from '../layout';
 
 export default function ProfilePage() {
+  const { openSidebar } = useSidebar();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -42,39 +45,55 @@ export default function ProfilePage() {
     []
   );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
-      </div>
-    );
-  }
+  const content = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+        </div>
+      );
+    }
 
-  // If profile doesn't exist or we're editing, show the form
-  if (!profile || isEditing) {
-    return (
-      <ProfileForm 
-        profile={profile}
-        onSave={(savedProfile) => {
-          setProfile(savedProfile);
-          setIsEditing(false);
-        }}
-        onCancel={() => {
-          if (profile) {
+    // If profile doesn't exist or we're editing, show the form
+    if (!profile || isEditing) {
+      return (
+        <ProfileForm 
+          profile={profile}
+          onSave={(savedProfile) => {
+            setProfile(savedProfile);
             setIsEditing(false);
-          }
-        }}
-        isCreating={!profile}
+          }}
+          onCancel={() => {
+            if (profile) {
+              setIsEditing(false);
+            }
+          }}
+          isCreating={!profile}
+        />
+      );
+    }
+
+    // Show profile display
+    return (
+      <ProfileDisplay 
+        profile={profile}
+        onEdit={() => setIsEditing(true)}
       />
     );
-  }
+  };
 
-  // Show profile display
+  const getPageTitle = () => {
+    if (loading) return "Your Profile";
+    if (!profile || isEditing) {
+      return !profile ? "Create Your Profile" : "Edit Your Profile";
+    }
+    return "Your Profile";
+  };
+
   return (
-    <ProfileDisplay 
-      profile={profile}
-      onEdit={() => setIsEditing(true)}
-    />
+    <PageOverlay title={getPageTitle()} onOpenSidebar={openSidebar}>
+      {content()}
+    </PageOverlay>
   );
 }
 
@@ -82,12 +101,8 @@ export default function ProfilePage() {
 function ProfileDisplay({ profile, onEdit }: { profile: UserProfile; onEdit: () => void }) {
   return (
     <div className="h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Your Profile</h1>
-          <p className="text-gray-600">Manage your personal information</p>
-        </div>
+      {/* Action button */}
+      <div className="flex justify-end mb-6">
         <button
           onClick={onEdit}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -217,36 +232,26 @@ function ProfileForm({
 
   return (
     <div className="h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isCreating ? 'Create Your Profile' : 'Edit Your Profile'}
-          </h1>
-          <p className="text-gray-600">
-            {isCreating ? 'Set up your personal information' : 'Update your personal information'}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {!isCreating && (
-            <button
-              onClick={handleCancel}
-              disabled={saving}
-              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              <X className="h-4 w-4" />
-              Cancel
-            </button>
-          )}
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2 mb-6">
+        {!isCreating && (
           <button
-            onClick={handleSubmit}
-            disabled={saving || !formData.name.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+            onClick={handleCancel}
+            disabled={saving}
+            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {isCreating ? 'Create Profile' : 'Save Changes'}
+            <X className="h-4 w-4" />
+            Cancel
           </button>
-        </div>
+        )}
+        <button
+          onClick={handleSubmit}
+          disabled={saving || !formData.name.trim()}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {isCreating ? 'Create Profile' : 'Save Changes'}
+        </button>
       </div>
 
       {/* Form */}

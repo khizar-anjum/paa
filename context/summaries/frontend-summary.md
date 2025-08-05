@@ -1,100 +1,167 @@
-# PAA Frontend Summary
+# PAA Frontend Summary - Chat-First Interface
 
 ## Architecture
 - **Framework**: Next.js 14 with App Router
 - **Language**: TypeScript with strict type checking
 - **Styling**: Tailwind CSS with custom components
-- **Icons**: Lucide React for consistent iconography
-- **Notifications**: Sonner for toast notifications
+- **UI Library**: Lucide React icons, Sonner for notifications
+- **Markdown**: react-markdown with remark-gfm for rich text
+
+## Chat-First Interface Design
+
+### Core Layout System
+The application uses a chat-first approach where the chat is always the primary interface:
+
+```typescript
+// Dashboard Layout (layout.tsx)
+export default function DashboardLayout({ children }) {
+  const isOverlayPage = [
+    '/dashboard/profile',
+    '/dashboard/people',
+    '/dashboard/commitments', 
+    '/dashboard/analytics'
+  ].includes(pathname);
+
+  return (
+    <SidebarContext.Provider value={{ openSidebar }}>
+      {/* Chat always rendered */}
+      <PersistentChatPanel />
+      
+      {/* Overlays render on top when navigated to */}
+      {isOverlayPage && children}
+      
+      {/* Sidebar available everywhere */}
+      <CollapsibleSidebar />
+    </SidebarContext.Provider>
+  );
+}
+```
+
+### Navigation Components
+
+#### CollapsibleSidebar.tsx
+- **Hamburger Toggle**: Expandable/collapsible menu
+- **Navigation Items**:
+  - Dashboard (Chat) - Main interface
+  - Profile - User profile overlay
+  - People - People management overlay
+  - Commitments - Commitment management overlay
+  - Analytics - Analytics dashboard overlay
+  - Settings - Settings overlay
+  - Sign Out - Logout action
+
+#### PageOverlay.tsx
+Wrapper component for all overlay pages:
+```typescript
+interface PageOverlayProps {
+  title: string;
+  children: React.ReactNode;
+  onClose?: () => void;
+  onOpenSidebar?: () => void;
+}
+```
+- **Consistent Header**: Title and hamburger menu button
+- **Blur Background**: Shows chat behind with blur effect
+- **Browser History**: Integrates with browser back button
+
+### Context System
+
+#### SidebarContext
+Shares sidebar functionality across all pages:
+```typescript
+const SidebarContext = createContext<{
+  openSidebar: () => void;
+} | null>(null);
+
+export const useSidebar = () => {
+  const context = useContext(SidebarContext);
+  if (!context) throw new Error('useSidebar must be used within DashboardLayout');
+  return context;
+};
+```
 
 ## Core Components
 
-### Unified Commitment System
+### Chat System
+
+#### PersistentChatPanel.tsx
+The main chat interface that's always visible:
+- **Multiple Conversations**: Support for multiple chat sessions
+- **Message History**: Persistent conversation storage
+- **AI Integration**: Natural language commitment creation
+- **Always Active**: Remains functional even when overlays are open
+
+### Commitment Management
 
 #### CommitmentCard.tsx
-The central component displaying all commitment types with context-aware functionality:
-- **Unified Display**: Single component handles both one-time and recurring commitments
-- **Smart Layout**: Information displays on same line when space allows using `flex-wrap`
-- **Context-Aware Actions**: Different buttons/options based on commitment type
-- **Status Indicators**: Visual badges showing completion status, overdue warnings
-- **Completion Tracking**: Shows completion count and streaks for recurring commitments
-
-**Key Features**:
-```typescript
-// Displays on same line: "Daily • Due at 09:00 • 1 completed • From chat"
-{isRecurring && (
-  <div className="flex items-center flex-wrap gap-3 text-xs text-gray-500">
-    <span><Target /> {recurrenceText}</span>
-    {deadlineText && <span><Clock /> {deadlineText}</span>}
-    {streakInfo.total > 0 && <span><Flame /> {streakInfo.total} completed</span>}
-    {commitment.original_message && <span><MessageSquare /> From chat</span>}
-  </div>
-)}
-```
+Unified display for all commitment types:
+- **Type Detection**: Automatically determines one-time vs recurring
+- **Smart Actions**: Context-aware buttons (Complete, Skip, Edit, Delete)
+- **Status Indicators**: Visual badges for different states
+- **Information Display**: Consolidated single-line layout with flex-wrap
 
 #### CreateCommitmentModal.tsx
-Dynamic form that adapts based on commitment type:
-- **Smart Fields**: Shows different fields based on recurrence pattern selection
-- **Time Support**: Optional due_time field for recurring commitments
-- **Day Selection**: Weekly recurrence allows specific day selection
-- **Validation**: Form validation with error messaging
-
-**Form Structure**:
-- One-time: Task description + optional deadline
-- Recurring: Task description + recurrence pattern + optional due time + day selection (for weekly)
+Dynamic creation form:
+- **Adaptive Fields**: Shows relevant fields based on type selection
+- **Recurrence Options**: Daily, weekly, monthly patterns
+- **Time Support**: Optional due times for recurring commitments
+- **Validation**: Form validation with error messages
 
 #### EditCommitmentModal.tsx
-Context-aware editing with type-specific fields:
-- **Type-Specific Fields**: Different fields shown for one-time vs recurring commitments
-- **Time Field Support**: due_time editing for recurring commitments
-- **Controlled Inputs**: Proper React controlled component implementation
-- **Status Management**: Can update commitment status and timing
+Context-aware editing:
+- **Type-Specific**: Different fields for one-time vs recurring
+- **Time Editing**: Support for due_time field updates
+- **Status Management**: Update commitment status
 
 #### CommitmentFilters.tsx
-Advanced filtering system with visual indicators:
-- **Type Filters**: One-time vs Recurring with icons (Target/Repeat)
-- **Status Filters**: All commitment statuses (pending, active, completed, etc.)
-- **Visual Design**: Pill-style buttons with active states
-- **Search Integration**: Text search combined with filters
+Advanced filtering system:
+- **Type Filters**: One-time (Target icon) vs Recurring (Repeat icon)
+- **Status Filters**: All, Active, Completed, etc.
+- **Search**: Text search across commitments
+- **Visual Design**: Pill-style toggle buttons
 
-#### CommitmentCompletions.tsx
-History viewer for recurring commitment completions:
-- **Statistics Dashboard**: Shows completion rate, total entries, skips
-- **Completion List**: Chronological list of completions/skips with timestamps
-- **Visual Indicators**: Different styling for completed vs skipped entries
-- **Performance Metrics**: 30-day completion rate calculation
+### Analytics Components
 
-### Analytics Dashboard
-
-#### Updated Analytics (page.tsx)
-Unified analytics supporting both commitment types:
-- **Overview Cards**: Total commitments, recurring vs one-time breakdown
-- **Completion Metrics**: Rates, streaks, daily completions
-- **Type Indicators**: Visual icons distinguishing commitment types in tables
-- **Unified Charts**: Single chart system handling both types
+#### AnalyticsPage (analytics/page.tsx)
+Simplified analytics dashboard:
+- **Overview Cards**: 
+  - Total Commitments
+  - Recurring Commitments
+  - One-time Commitments
+  - Completion Rate
+  - Completed Today
+  - Longest Streak
+  - Total Conversations
+- **Commitment Details Table**: List view with type indicators
+- **Time Range Selector**: 7, 30, or 90 day views
+- **Removed Elements**: No mood tracking or completion charts
 
 #### AnalyticsChart.tsx
-Reusable chart component for commitment data visualization.
+Reusable chart component (currently unused after simplification)
 
-### Navigation & Layout
+### People Management
 
-#### Dashboard Layout
-- **Simplified Navigation**: Removed "Habits" from menu, unified under "Commitments"
-- **Responsive Design**: Mobile-first approach with flexible layouts
-- **Consistent Spacing**: Unified spacing and typography throughout
+#### PeoplePage (people/page.tsx)
+Contact management system:
+- **Person Cards**: Grid layout with basic info
+- **Detail View**: Full person profile with markdown
+- **Edit Mode**: In-place editing with save/cancel
+- **Delete Option**: Remove people with confirmation
+- **Hamburger Menu**: Navigation back to chat
+
+#### CreatePersonModal.tsx
+Person creation form with fields for name, pronouns, relationship, and description
 
 ## API Integration
 
-### Commitments API (`lib/api/commitments.ts`)
-Comprehensive API client with TypeScript interfaces:
-
+### Commitment API (`lib/api/commitments.ts`)
 ```typescript
 export interface Commitment {
   id: number;
   task_description: string;
   original_message?: string;
   deadline?: string;
-  recurrence_pattern: 'none' | 'daily' | 'weekly' | 'monthly' | 'custom';
+  recurrence_pattern: 'none' | 'daily' | 'weekly' | 'monthly';
   recurrence_interval: number;
   recurrence_days?: string;
   due_time?: string;
@@ -102,114 +169,120 @@ export interface Commitment {
   completion_count: number;
   completed_today?: boolean;
   is_recurring?: boolean;
-  // ... other fields
 }
+
+// Key functions
+getCommitments(filters?: CommitmentFilters)
+createCommitment(data: CommitmentCreate)
+updateCommitment(id: number, data: CommitmentUpdate)
+completeCommitment(id: number)
+skipCommitment(id: number)
+deleteCommitment(id: number)
 ```
-
-**Key API Functions**:
-- `getCommitments()` - Fetch with filtering support
-- `createCommitment()` - Create new commitments
-- `completeCommitment()` - Handle both one-time and recurring completions
-- `skipCommitment()` - Skip recurring commitment for today
-- `getCommitmentCompletions()` - Get completion history
-- `updateCommitment()` - Update commitment details including due_time
-
-### Utility Functions (`commitmentUtils`)
-Helper functions for commitment logic:
-- `isRecurring()` - Check if commitment is recurring
-- `isOverdue()` - Determine overdue status
-- `formatDeadline()` - Smart deadline formatting (shows time for recurring, nothing if no time)
-- `formatRecurrence()` - Display recurrence patterns
-- `getStreakInfo()` - Calculate completion statistics
 
 ### Analytics API (`lib/api/analytics.ts`)
-Updated for unified system:
-- `getCommitmentsAnalytics()` - Unified analytics endpoint
-- `getOverview()` - Overview statistics with commitment type breakdown
+```typescript
+export interface OverviewAnalytics {
+  total_commitments: number;
+  recurring_commitments: number;
+  one_time_commitments: number;
+  completed_today: number;
+  completion_rate: number;
+  longest_streak: number;
+  total_conversations: number;
+}
 
-## UI/UX Improvements
+getCommitmentsAnalytics(days: number)
+getOverview()
+getMoodAnalytics(days: number) // Still available but unused
+```
 
-### Smart Information Display
-- **Consolidated Layout**: All commitment info on same line when space allows
-- **Conditional Display**: Only shows time information when actually set
-- **Context Awareness**: Different information shown based on commitment type
-- **No Duplication**: Eliminated duplicate "Daily" text issue
+### People API (`lib/api/people.ts`)
+```typescript
+export interface Person {
+  id: number;
+  name: string;
+  pronouns?: string;
+  how_you_know_them?: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
 
-### Visual Design
-- **Consistent Icons**: 
-  - Target icon for one-time commitments
-  - Repeat icon for recurring commitments
-  - Clock icon for time information
-  - Flame icon for completion counts
-- **Status Colors**: Color-coded borders and badges for different states
-- **Responsive Cards**: Cards adapt to different screen sizes
-
-### Form Enhancements
-- **Progressive Disclosure**: Forms show relevant fields based on selections
-- **Time Input**: Native HTML5 time inputs for due times
-- **Day Picker**: Interactive day selection for weekly recurrence
-- **Validation Feedback**: Clear error messages and validation states
+getAll()
+create(data: PersonCreate)
+update(id: number, data: PersonUpdate)
+delete(id: number)
+```
 
 ## State Management
-- **Local State**: React hooks for component state (useState, useEffect)
-- **No Global State**: Simple prop passing and local state management
-- **Form State**: Controlled components with proper validation
-- **API State**: Loading states and error handling
+- **Local State**: React hooks (useState, useEffect)
+- **Context API**: SidebarContext for navigation state
+- **No Redux**: Simple prop passing and local state
+- **Form State**: Controlled components with validation
 
-## Type Safety
-- **Full TypeScript**: Complete type coverage across all components
-- **Interface Definitions**: Clear interfaces for all data structures
-- **API Types**: Typed API responses and request payloads
-- **Component Props**: Strongly typed component interfaces
-
-## Recent Major Changes
-
-### Habits to Commitments Migration
-- **Removed Components**: Deleted all habit-related components (HabitCard, CreateHabitModal, etc.)
-- **Updated Navigation**: Removed habits from dashboard navigation
-- **Unified Components**: Enhanced commitment components to handle all functionality
-- **API Consolidation**: Single API for all commitment operations
-
-### Layout Improvements
-- **Single Line Display**: Commitment info displays on one line with flex-wrap
-- **Time Field Integration**: Added time fields to create/edit modals
-- **Controlled Input Fix**: Fixed React controlled component warnings
-- **Visual Consistency**: Consistent iconography and spacing
-
-### Enhanced User Experience
-- **Context-Aware Actions**: Different actions available based on commitment type
-- **Smart Defaults**: Intelligent form behavior and field visibility
-- **Improved Filtering**: Enhanced filter system with type-based filtering
-- **Better Analytics**: Unified analytics with type breakdowns
-
-## File Structure
+## Routing Structure
 ```
-paa-frontend/
-├── app/
-│   ├── components/
-│   │   ├── CommitmentCard.tsx          # Main commitment display
-│   │   ├── CreateCommitmentModal.tsx   # Creation form
-│   │   ├── EditCommitmentModal.tsx     # Editing form
-│   │   ├── CommitmentFilters.tsx       # Filtering system
-│   │   ├── CommitmentCompletions.tsx   # History viewer
-│   │   ├── CommitmentStatusBadge.tsx   # Status indicator
-│   │   └── AnalyticsChart.tsx          # Charts
-│   ├── dashboard/
-│   │   ├── layout.tsx                  # Navigation layout
-│   │   ├── page.tsx                    # Commitments list
-│   │   └── analytics/page.tsx          # Analytics dashboard
-│   └── lib/
-│       └── api/
-│           ├── commitments.ts          # API client
-│           └── analytics.ts            # Analytics API
+/dashboard              → Redirects to chat
+/dashboard/profile      → Profile overlay
+/dashboard/people       → People overlay
+/dashboard/commitments  → Commitments overlay
+/dashboard/analytics    → Analytics overlay
+/dashboard/settings     → Settings overlay (TBD)
 ```
+
+## Recent Updates
+
+### Phase 4 Implementation
+1. **Navigation Flow**: Complete overlay system with browser history
+2. **Hamburger Menus**: Added to all overlay pages
+3. **Sidebar Context**: Shared navigation state
+4. **Commitments Integration**: Added to overlay system
+5. **Analytics Simplification**: Removed charts and mood tracking
+
+### Bug Fixes
+- Fixed missing hamburger menus on overlay pages
+- Resolved backend endpoint 404 errors
+- Fixed field name mismatches (habit_name → commitment_name)
+- Corrected Next.js build errors
+- Fixed React controlled component warnings
+
+## UI/UX Patterns
+
+### Overlay Behavior
+- **Blur Background**: Chat visible but blurred behind overlays
+- **Full Height**: Overlays take full viewport height
+- **Consistent Headers**: All overlays have title and hamburger menu
+- **Smooth Transitions**: CSS transitions for opening/closing
+
+### Responsive Design
+- **Mobile First**: Designed for mobile screens
+- **Flexible Layouts**: Components adapt to screen size
+- **Touch Friendly**: Large tap targets for mobile
+- **Scroll Management**: Proper scroll containers
+
+### Visual Design
+- **Icon System**:
+  - 🎯 Target: One-time commitments
+  - 🔄 Repeat: Recurring commitments
+  - 📊 BarChart3: Analytics
+  - 👤 User: Profile/People
+  - 💬 MessageSquare: Chat origin
+- **Color Scheme**: Blue primary, gray secondary
+- **Typography**: Clean, readable text hierarchy
+- **Spacing**: Consistent padding and margins
+
+## Performance Optimizations
+- **Code Splitting**: Next.js automatic code splitting
+- **Image Optimization**: Next.js Image component
+- **Lazy Loading**: Components loaded as needed
+- **Memoization**: React.memo for expensive components
 
 ## Current Status
-- ✅ Complete unified commitment system
-- ✅ All habit components removed
-- ✅ Enhanced commitment cards with smart layouts
-- ✅ Time field support in forms
-- ✅ Updated analytics dashboard
-- ✅ Proper TypeScript coverage
-- ✅ Responsive design implementation
-- ✅ Context-aware UI components
+✅ Chat-first interface fully implemented
+✅ All overlay pages functional with navigation
+✅ Commitments system unified and working
+✅ Analytics simplified per requirements
+✅ People management operational
+✅ Browser history navigation working
+✅ Responsive design implemented

@@ -1,14 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Brain, User, History, Plus } from 'lucide-react';
+import { Send, Loader2, Brain, User, History, Plus, Menu } from 'lucide-react';
 import { toast } from 'sonner';
 import { chatApi, ChatHistory } from '@/lib/api/chat';
 import { proactiveApi, ProactiveMessage, Commitment } from '@/lib/api/proactive';
 import { sessionAPI, Session } from '@/lib/api/sessions';
 import { dataUpdateEvents, DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
 
-export function PersistentChatPanel() {
+interface PersistentChatPanelProps {
+  onOpenSidebar?: () => void;
+}
+
+export function PersistentChatPanel({ onOpenSidebar }: PersistentChatPanelProps) {
   const [messages, setMessages] = useState<ChatHistory[]>([]);
   const [proactiveMessages, setProactiveMessages] = useState<ProactiveMessage[]>([]);
   const [commitments, setCommitments] = useState<Commitment[]>([]);
@@ -263,6 +267,16 @@ export function PersistentChatPanel() {
       <div className="border-b border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center">
+            {/* Hamburger Menu Button */}
+            {onOpenSidebar && (
+              <button
+                onClick={onOpenSidebar}
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors mr-3"
+                aria-label="Open navigation menu"
+              >
+                <Menu className="h-5 w-5 text-gray-600" />
+              </button>
+            )}
             <Brain className="h-6 w-6 text-blue-600 mr-2" />
             <h2 className="text-lg font-semibold text-gray-900">AI Assistant</h2>
             {currentSessionName && (

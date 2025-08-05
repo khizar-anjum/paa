@@ -9,8 +9,11 @@ import remarkGfm from 'remark-gfm';
 import { CreatePersonModal } from '@/app/components/CreatePersonModal';
 import { useDataRefresh } from '@/hooks/useDataRefresh';
 import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
+import { PageOverlay } from '@/app/components/PageOverlay';
+import { useSidebar } from '../layout';
 
 export default function PeoplePage() {
+  const { openSidebar } = useSidebar();
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
@@ -68,55 +71,53 @@ export default function PeoplePage() {
   }
 
   return (
-    <div className="h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">People You Know</h1>
-          <p className="text-gray-600">Manage your relationships and connections</p>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Add Person
-        </button>
-      </div>
-
-      {/* People Grid */}
-      {people.length === 0 ? (
-        <div className="text-center py-12">
-          <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No people added yet</h3>
-          <p className="text-gray-600 mb-4">Start building your network by adding people you know</p>
+    <PageOverlay title="People You Know" onOpenSidebar={openSidebar}>
+      <div className="h-full">
+        {/* Action button */}
+        <div className="flex justify-end mb-6">
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <Plus className="h-4 w-4" />
-            Add Your First Person
+            Add Person
           </button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {people.map((person) => (
-            <PersonCard
-              key={person.id}
-              person={person}
-              onClick={() => handlePersonClick(person)}
-            />
-          ))}
-        </div>
-      )}
 
-      {/* Create Person Modal */}
-      <CreatePersonModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onPersonCreated={loadPeople}
-      />
-    </div>
+        {/* People Grid */}
+        {people.length === 0 ? (
+          <div className="text-center py-12">
+            <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No people added yet</h3>
+            <p className="text-gray-600 mb-4">Start building your network by adding people you know</p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Your First Person
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {people.map((person) => (
+              <PersonCard
+                key={person.id}
+                person={person}
+                onClick={() => handlePersonClick(person)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Create Person Modal */}
+        <CreatePersonModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onPersonCreated={loadPeople}
+        />
+      </div>
+    </PageOverlay>
   );
 }
 

@@ -1,117 +1,160 @@
 # Personal Accountability Assistant (PAA) - Project Summary
 
 ## Overview
-A comprehensive personal accountability system built with FastAPI backend and Next.js frontend, featuring a unified commitments system that handles both one-time and recurring tasks.
+A comprehensive personal accountability system with a **chat-first interface** design, built with FastAPI backend and Next.js frontend. Features a unified commitments system handling both one-time and recurring tasks through natural conversation.
 
-## Architecture
+## Current Architecture
+
+### Chat-First Interface Design
+- **Primary Interface**: Full-screen chat as the main interaction point
+- **Overlay System**: Profile, People, Commitments, and Analytics as overlay pages
+- **Persistent Chat**: Chat remains active behind overlays with blur effect
+- **Navigation**: Collapsible sidebar with hamburger menu on all pages
+- **Browser History**: Proper back button support for overlay navigation
+
+### Tech Stack
 - **Backend**: FastAPI + SQLAlchemy + PostgreSQL
-- **Frontend**: Next.js + React + TypeScript + Tailwind CSS
+- **Frontend**: Next.js 14 (App Router) + React + TypeScript + Tailwind CSS
 - **AI Integration**: LLM-based intent detection and natural language processing
 - **Database**: PostgreSQL with SQLAlchemy ORM
 
 ## Core Features
 
 ### Unified Commitments System
-- **Single Model**: Replaced separate habits and commitments with unified commitment system
-- **Recurrence Support**: Handles one-time, daily, weekly, and monthly patterns
+- **Single Model**: Unified commitment system handling both one-time and recurring tasks
+- **Recurrence Support**: Daily, weekly, and monthly patterns with custom intervals
 - **Completion Tracking**: Individual completion records with skip functionality
 - **Time Management**: Optional due times for recurring commitments, deadlines for one-time
 
-### Chat Interface
-- **Natural Language Processing**: Create commitments through conversational interface
-- **LLM Intent Detection**: Automatically understands user intentions and extracts commitment details
-- **Multiple Chat Sessions**: Support for multiple concurrent conversations
+### Chat Interface (Primary)
+- **Natural Language Processing**: Create and manage commitments through conversation
+- **Multiple Sessions**: Support for multiple concurrent chat conversations
 - **Persistent History**: Chat conversations stored and retrievable
+- **Always Visible**: Chat remains the central focus of the application
 
-### Analytics & Insights
-- **Completion Tracking**: Visual charts and statistics for commitment progress
-- **Mood Tracking**: Daily mood check-ins with trend analysis
-- **Performance Metrics**: completion rates, streaks, and patterns
-- **Unified Dashboard**: Single view for all analytics across commitment types
+### Analytics Dashboard
+- **Overview Cards**: Total commitments, completion rates, streaks
+- **Commitment Details Table**: Detailed view of all commitments with type indicators
+- **Clean Design**: Removed mood tracking and completion rate charts per user request
+- **Time Range Selection**: View data for 7, 30, or 90 days
 
-### User Management
-- **Authentication**: JWT-based user authentication
-- **Profile Management**: User profiles with customizable settings
-- **Multi-user Support**: Isolated data per user account
+### People Management
+- **Profile Storage**: Store information about people you know
+- **Markdown Support**: Rich text descriptions with markdown formatting
+- **Edit/Delete**: Full CRUD operations for person profiles
+- **Overlay Display**: Shows as overlay with hamburger menu for navigation
 
-## Key Components
+## UI/UX Components
 
-### Backend Services
-- **Commitment Management**: CRUD operations, completion tracking, recurrence handling
-- **Chat Processing**: NLP-powered conversation handling and intent extraction
-- **Analytics Engine**: Data aggregation and insights generation
-- **User Authentication**: JWT token management and user sessions
+### Navigation System
+- **Collapsible Sidebar**: 
+  - Dashboard (Chat)
+  - Profile
+  - People
+  - Commitments
+  - Analytics
+  - Settings
+  - Sign Out
+- **Hamburger Menu**: Available on all overlay pages for navigation
+- **Browser History**: Back button support for natural navigation
 
-### Frontend Components
-- **Commitment Cards**: Unified display for all commitment types with context-aware actions
-- **Creation Forms**: Dynamic forms adapting to commitment type (one-time vs recurring)
-- **Analytics Dashboard**: Comprehensive charts and statistics
-- **Chat Interface**: Real-time conversation with the assistant
+### Layout Structure
+```typescript
+// Dashboard Layout handles chat vs overlay display
+const isOverlayPage = [
+  '/dashboard/profile',
+  '/dashboard/people', 
+  '/dashboard/commitments',
+  '/dashboard/analytics'
+].includes(pathname);
 
-## Technical Highlights
+// Overlay pages wrapped in PageOverlay component
+<PageOverlay title="Title" onOpenSidebar={openSidebar}>
+  {/* Page content */}
+</PageOverlay>
+```
 
-### Database Design
-- **Unified Schema**: Single commitments table handling all types
-- **Completion Tracking**: Separate table for individual completion records
-- **Flexible Recurrence**: JSON-based recurrence pattern storage
-- **Migration Strategy**: Safe migration from habits to commitments system
+### Component Architecture
+- **PageOverlay**: Wrapper component for all overlay pages with consistent header
+- **PersistentChatPanel**: Main chat interface that remains visible
+- **CollapsibleSidebar**: Navigation menu with expand/collapse functionality
+- **SidebarContext**: React context for sharing sidebar state across pages
 
-### API Design
-- **RESTful Endpoints**: Standard REST patterns for all resources
-- **Filtering & Sorting**: Advanced query capabilities for commitments
-- **Bulk Operations**: Efficient handling of multiple records
-- **Error Handling**: Comprehensive error responses and validation
+## Recent Implementation (Phase 4)
 
-### Frontend Architecture
-- **Component-Based**: Modular React components with clear separation of concerns
-- **State Management**: Local state with React hooks, no external state library needed
-- **Responsive Design**: Mobile-first approach with Tailwind CSS
-- **Type Safety**: Full TypeScript coverage for type safety
+### Navigation Flow Improvements
+1. **Routing Logic**: Updated dashboard layout to handle overlay pages
+2. **Browser History**: Added popstate event handling for back button
+3. **Sidebar Context**: Created context system for sidebar functionality
+4. **Hamburger Menus**: Added to all overlay pages for consistent navigation
+5. **Commitments Integration**: Added commitments page to overlay system
 
-## Recent Major Changes
-
-### Habits to Commitments Migration
-- **Complete Replacement**: Removed habits system entirely, unified with commitments
-- **Data Migration**: Safe migration script preserving all existing data
-- **UI Transformation**: Updated all frontend components to handle unified system
-- **API Consolidation**: Simplified API surface with single commitment endpoints
-
-### Enhanced User Experience
-- **Improved Layout**: Consolidated information display on commitment cards
-- **Context-Aware Actions**: Different actions available based on commitment type
-- **Time Field Support**: Optional time fields in create/edit forms
-- **Visual Indicators**: Clear icons and badges distinguishing commitment types
+### Fixed Issues
+- **Navigation Problem**: Added hamburger menus to all overlay pages
+- **Analytics Errors**: Fixed backend endpoints and field name mismatches
+- **Build Errors**: Resolved Next.js compilation issues
+- **Type Mismatches**: Aligned frontend and backend field names
 
 ## File Structure
 ```
 paa-backend/
-├── database.py          # SQLAlchemy models and database setup
-├── main.py             # FastAPI application and routes
-├── schemas/            # Pydantic schemas for API validation
-├── services/           # Business logic services
-└── migrate_habits_to_commitments.py  # Database migration script
+├── main.py                              # FastAPI routes and endpoints
+├── models.py                            # SQLAlchemy database models
+├── schemas.py                           # Pydantic validation schemas
+├── services/
+│   └── action_processor.py             # LLM chat processing
+└── migrate_habits_to_commitments.py    # Migration script
 
 paa-frontend/
 ├── app/
-│   ├── components/     # React components
-│   ├── dashboard/      # Main application pages
-│   └── lib/           # Utilities and API clients
-└── lib/api/           # API integration layer
+│   ├── components/
+│   │   ├── PersistentChatPanel.tsx    # Main chat interface
+│   │   ├── CollapsibleSidebar.tsx     # Navigation sidebar
+│   │   ├── PageOverlay.tsx            # Overlay wrapper component
+│   │   ├── CommitmentCard.tsx         # Commitment display
+│   │   ├── CreateCommitmentModal.tsx  # Creation form
+│   │   └── AnalyticsChart.tsx         # Chart component
+│   ├── dashboard/
+│   │   ├── layout.tsx                 # Main layout with overlay logic
+│   │   ├── page.tsx                   # Chat page (redirects)
+│   │   ├── commitments/page.tsx       # Commitments overlay
+│   │   ├── analytics/page.tsx         # Analytics overlay
+│   │   ├── people/page.tsx            # People overlay
+│   │   └── profile/page.tsx           # Profile overlay
+│   └── lib/
+│       └── api/                       # API client modules
+└── context/
+    └── plans/
+        └── chat-first-interface-redesign.md  # Design document
 ```
 
 ## Current Status
-- ✅ Unified commitments system fully implemented
-- ✅ Complete frontend transformation completed
-- ✅ Database migration script ready
-- ✅ Analytics dashboard updated
-- ✅ All UI components modernized
-- ✅ Time field support in forms
-- ✅ Optimized commitment card layouts
+- ✅ Chat-first interface fully implemented (Phases 1-4)
+- ✅ All overlay pages have hamburger menus
+- ✅ Browser history navigation working
+- ✅ Sidebar context system implemented
+- ✅ Analytics page cleaned up (removed charts/mood cards)
+- ✅ Backend endpoints aligned with frontend
+- ✅ Commitments integrated into new navigation
+
+## API Endpoints
+
+### Core Endpoints
+- **Commitments**: `/commitments` - Full CRUD with filtering
+- **Chat**: `/conversations/{id}/messages` - Chat message processing
+- **Analytics**: `/analytics/commitments`, `/analytics/overview`
+- **People**: `/people` - People management
+- **Auth**: `/login`, `/register`, `/me` - Authentication
+
+### Analytics Endpoints
+- `GET /analytics/commitments` - Commitment completion data
+- `GET /analytics/overview` - Overall statistics
+- `GET /analytics/mood` - Mood tracking (still available in backend)
 
 ## Next Steps
-The core unified system is complete. Future enhancements could include:
-- Advanced recurrence patterns (custom intervals)
-- Enhanced analytics with more detailed insights
+The chat-first interface redesign is complete through Phase 4. Future considerations:
+- Enhanced chat capabilities with more AI features
+- Advanced commitment scheduling options
+- Team collaboration features
 - Mobile app development
-- Integration with external calendar systems
-- Team/shared commitment features
+- External calendar integration

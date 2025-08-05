@@ -5,8 +5,11 @@ import { BarChart3, TrendingUp, Calendar, Brain, Target, Repeat, CheckSquare } f
 import { analyticsApi, CommitmentAnalytics, MoodAnalytics, OverviewAnalytics } from '@/lib/api/analytics';
 import { AnalyticsChart } from '@/app/components/AnalyticsChart';
 import { toast } from 'sonner';
+import { PageOverlay } from '@/app/components/PageOverlay';
+import { useSidebar } from '../layout';
 
 export default function AnalyticsPage() {
+  const { openSidebar } = useSidebar();
   const [commitmentsData, setCommitmentsData] = useState<CommitmentAnalytics[]>([]);
   const [moodData, setMoodData] = useState<MoodAnalytics | null>(null);
   const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
@@ -51,22 +54,20 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-600 text-sm mt-1">Track your progress and insights</p>
+    <PageOverlay title="Analytics" onOpenSidebar={openSidebar}>
+      <div>
+        {/* Time range selector */}
+        <div className="flex justify-end mb-6">
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(Number(e.target.value))}
+            className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
         </div>
-        <select
-          value={timeRange}
-          onChange={(e) => setTimeRange(Number(e.target.value))}
-          className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value={7}>Last 7 days</option>
-          <option value={30}>Last 30 days</option>
-          <option value={90}>Last 90 days</option>
-        </select>
-      </div>
 
       {/* Overview Cards */}
       {overview && (
@@ -145,18 +146,6 @@ export default function AnalyticsPage() {
 
           <div className="bg-white rounded-lg shadow-md p-4">
             <div className="flex items-center">
-              <span className="text-2xl">{getMoodEmoji(overview.current_mood)}</span>
-              <div className="ml-3">
-                <p className="text-xs font-medium text-gray-500">Current Mood</p>
-                <p className="text-xl font-bold text-gray-900">
-                  {overview.current_mood ? `${overview.current_mood}/5` : 'Not set'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="flex items-center">
               <Brain className="h-6 w-6 text-teal-600" />
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-500">Conversations</p>
@@ -169,24 +158,7 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* Charts - Stacked vertically for narrow layout */}
-      <div className="space-y-6">
-        {commitmentsData.length > 0 && (
-          <AnalyticsChart
-            data={commitmentsData}
-            type="commitments"
-            title="Commitment Completion Rates"
-          />
-        )}
-
-        {moodData && moodData.daily_moods && (
-          <AnalyticsChart
-            data={moodData.daily_moods}
-            type="mood"
-            title="Mood Trend"
-          />
-        )}
-      </div>
+      {/* Charts section removed */}
 
       {/* Commitments Details Table */}
       {commitmentsData.length > 0 && (
@@ -237,6 +209,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PageOverlay>
   );
 }
