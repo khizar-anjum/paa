@@ -13,7 +13,7 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard (Chat)', href: '/dashboard', icon: MessageSquare },
+  { name: 'Chat', href: '/dashboard', icon: MessageSquare },
   { name: 'Profile', href: '/dashboard/profile', icon: User },
   { name: 'People', href: '/dashboard/people', icon: Users },
   { name: 'Commitments', href: '/dashboard/commitments', icon: Target },
@@ -76,22 +76,26 @@ export function CollapsibleSidebar({ currentPath, user, onLogout, isOpen, onClos
     onClose();
   };
 
-  if (!isOpen) {
-    return null; // Don't render anything when closed
-  }
-
   return (
     <>
-      {/* Backdrop - only show on small screens */}
+      {/* Backdrop - only show on small screens with fade animation */}
       <div
-        className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-[60] transition-opacity"
+        className={`
+          lg:hidden fixed inset-0 bg-black bg-opacity-50 z-[60]
+          transition-opacity duration-300 ease-in-out
+          ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}
+        `}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Sidebar - only show on small screens */}
+      {/* Sidebar - only show on small screens with slide animation */}
       <div
-        className="lg:hidden fixed left-0 top-0 h-full w-80 bg-white shadow-xl z-[70] flex flex-col animate-in slide-in-from-left duration-300"
+        className={`
+          lg:hidden fixed left-0 top-0 h-full w-80 bg-white shadow-xl z-[70] flex flex-col
+          transform transition-transform duration-300 ease-in-out
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">

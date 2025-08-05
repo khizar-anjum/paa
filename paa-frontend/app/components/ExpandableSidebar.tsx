@@ -12,7 +12,7 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard (Chat)', href: '/dashboard', icon: MessageSquare },
+  { name: 'Chat', href: '/dashboard', icon: MessageSquare },
   { name: 'Profile', href: '/dashboard/profile', icon: User },
   { name: 'People', href: '/dashboard/people', icon: Users },
   { name: 'Commitments', href: '/dashboard/commitments', icon: Target },
