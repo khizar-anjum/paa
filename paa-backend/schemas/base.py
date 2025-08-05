@@ -143,18 +143,31 @@ class MoodAnalytics(BaseModel):
     average_mood: float
     mood_trend: List[dict]  # [{date: str, mood: int}]
 
-# Commitment schemas
+# Commitment schemas (unified system - handles both one-time and recurring)
 class CommitmentBase(BaseModel):
     task_description: str
     original_message: Optional[str] = None
     deadline: Optional[date] = None
+    recurrence_pattern: str = "none"  # none, daily, weekly, monthly, custom
+    recurrence_interval: int = 1  # Every N days/weeks/months
+    recurrence_days: Optional[str] = None  # For weekly: "mon,wed,fri"
+    recurrence_end_date: Optional[date] = None
+    due_time: Optional[time] = None
+    reminder_settings: Optional[dict] = None
 
 class CommitmentCreate(CommitmentBase):
     created_from_conversation_id: Optional[int] = None
 
 class CommitmentUpdate(BaseModel):
-    status: Optional[str] = None  # pending, completed, missed, dismissed
+    task_description: Optional[str] = None
+    status: Optional[str] = None  # pending, completed, missed, dismissed, active, archived
     deadline: Optional[date] = None
+    recurrence_pattern: Optional[str] = None
+    recurrence_interval: Optional[int] = None
+    recurrence_days: Optional[str] = None
+    recurrence_end_date: Optional[date] = None
+    due_time: Optional[time] = None
+    reminder_settings: Optional[dict] = None
 
 class Commitment(CommitmentBase):
     id: int
@@ -164,6 +177,31 @@ class Commitment(CommitmentBase):
     last_reminded_at: Optional[datetime] = None
     reminder_count: int
     created_at: datetime
+    completion_count: int = 0
+    last_completed_at: Optional[datetime] = None
+    
+    # Helper properties
+    is_recurring: bool = False
+    completed_today: bool = False
+    
+    class Config:
+        from_attributes = True
+
+# Commitment completion schemas
+class CommitmentCompletionBase(BaseModel):
+    notes: Optional[str] = None
+    completion_date: Optional[date] = None  # Defaults to today
+    skipped: bool = False
+
+class CommitmentCompletionCreate(CommitmentCompletionBase):
+    pass
+
+class CommitmentCompletion(CommitmentCompletionBase):
+    id: int
+    commitment_id: int
+    user_id: int
+    completed_at: datetime
+    completion_date: date
     
     class Config:
         from_attributes = True

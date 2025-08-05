@@ -190,15 +190,21 @@ class ActionProcessor:
     ) -> Dict[str, Any]:
         """Create a commitment in the database"""
         try:
-            # Create the commitment
+            # Create the commitment with unified system fields
             db_commitment = models.Commitment(
                 user_id=user_id,
                 task_description=commitment.task_description,
                 deadline=commitment.deadline.date() if commitment.deadline else None,
-                status="pending",
+                status="active" if commitment.recurrence_pattern != "none" else "pending",
                 original_message=f"Auto-extracted commitment",
                 reminder_count=0,
-                created_at=time_service.now()
+                created_at=time_service.now(),
+                # New unified system fields
+                recurrence_pattern=commitment.recurrence_pattern,
+                recurrence_interval=1,
+                recurrence_days=','.join(commitment.recurrence_days) if commitment.recurrence_days else None,
+                due_time=commitment.due_time,
+                completion_count=0
             )
             
             db.add(db_commitment)
@@ -257,14 +263,14 @@ class ActionProcessor:
         user_id: int,
         db: Session
     ) -> Dict[str, Any]:
-        """Process a habit-related action"""
+        """Process a habit-related action - now converted to commitment actions in unified system"""
         try:
             if habit_action.action_type == 'log_completion':
-                return await self._log_habit_completion(habit_action, user_id, db)
+                return await self._log_commitment_completion(habit_action, user_id, db)
             elif habit_action.action_type == 'create_new':
-                return await self._create_new_habit(habit_action, user_id, db)
+                return await self._create_new_recurring_commitment(habit_action, user_id, db)
             elif habit_action.action_type == 'update_schedule':
-                return await self._update_habit_schedule(habit_action, user_id, db)
+                return await self._update_commitment_schedule(habit_action, user_id, db)
             else:
                 return {
                     'success': False,
@@ -280,211 +286,214 @@ class ActionProcessor:
                 'user_visible': False
             }
     
-    async def _log_habit_completion(
+    async def _log_commitment_completion(
         self,
         habit_action: HabitAction,
         user_id: int,
         db: Session
     ) -> Dict[str, Any]:
-        """Log a habit completion"""
-        # First try to find exact or similar existing habit
-        habit = habit_matcher.find_similar_habit(
-            habit_action.habit_identifier, 
-            user_id, 
-            db,
-            similarity_threshold=0.7
-        )
+        """Log a commitment completion (formerly habit completion) in unified system"""
+        # Find existing recurring commitment
+        commitment = db.query(models.Commitment).filter(
+            models.Commitment.user_id == user_id,
+            models.Commitment.task_description.ilike(f"%{habit_action.habit_identifier}%"),
+            models.Commitment.recurrence_pattern != "none",
+            models.Commitment.status == "active"
+        ).first()
         
-        if habit:
-            debug_logger.info(f"🔍 Found similar habit: '{habit_action.habit_identifier}' -> '{habit.name}' (ID: {habit.id})")
-        else:
-            # If no similar habit found, try the old pattern matching as fallback
-            habit = db.query(models.Habit).filter(
-                models.Habit.user_id == user_id,
-                models.Habit.name.ilike(f"%{habit_action.habit_identifier}%"),
-                models.Habit.is_active == 1
-            ).first()
-            
-            if habit:
-                debug_logger.info(f"🔍 Found habit via pattern matching: '{habit_action.habit_identifier}' -> '{habit.name}' (ID: {habit.id})")
+        if commitment:
+            debug_logger.info(f"🔍 Found similar recurring commitment: '{habit_action.habit_identifier}' -> '{commitment.task_description}' (ID: {commitment.id})")
         
         was_auto_created = False
-        if not habit:
-            # Auto-create the habit if it doesn't exist
+        if not commitment:
+            # Auto-create as recurring commitment if it doesn't exist
             try:
-                # Get a clean, normalized habit name
-                suggested_name = habit_matcher.suggest_habit_name(habit_action.habit_identifier)
+                suggested_name = habit_action.habit_identifier.strip()
                 
-                debug_logger.info(f"🔧 Auto-creating missing habit: '{habit_action.habit_identifier}' -> '{suggested_name}'")
+                debug_logger.info(f"🔧 Auto-creating missing recurring commitment: '{habit_action.habit_identifier}' -> '{suggested_name}'")
                 was_auto_created = True
                 
-                habit = models.Habit(
+                commitment = models.Commitment(
                     user_id=user_id,
-                    name=suggested_name,
-                    frequency='daily',  # default frequency
-                    reminder_time=None,
-                    is_active=1,
-                    created_at=time_service.now()
+                    task_description=suggested_name,
+                    recurrence_pattern='daily',  # default assumption for habits
+                    recurrence_interval=1,
+                    status='active',
+                    completion_count=0,
+                    created_at=time_service.now(),
+                    original_message="Auto-created from habit tracking"
                 )
                 
-                db.add(habit)
+                db.add(commitment)
                 db.flush()  # Get the ID for logging
                 
-                debug_logger.info(f"✅ Auto-created habit: {habit.name} (ID: {habit.id})")
+                debug_logger.info(f"✅ Auto-created recurring commitment: {commitment.task_description} (ID: {commitment.id})")
                 
             except Exception as create_error:
-                debug_logger.error(f"❌ Failed to auto-create habit: {create_error}")
+                debug_logger.error(f"❌ Failed to auto-create recurring commitment: {create_error}")
                 return {
                     'success': False,
-                    'error': f"Failed to create habit '{habit_action.habit_identifier}': {str(create_error)}",
+                    'error': f"Failed to create recurring commitment '{habit_action.habit_identifier}': {str(create_error)}",
                     'user_visible': True,
-                    'type': 'habit_creation_failed'
+                    'type': 'commitment_creation_failed'
                 }
         
         # Check if already completed today
         completion_date = habit_action.completion_date or date.today()
-        existing_log = db.query(models.HabitLog).filter(
-            models.HabitLog.habit_id == habit.id,
-            func.date(models.HabitLog.completed_at) == completion_date
+        existing_completion = db.query(models.CommitmentCompletion).filter(
+            models.CommitmentCompletion.commitment_id == commitment.id,
+            models.CommitmentCompletion.completion_date == completion_date
         ).first()
         
-        if existing_log:
+        if existing_completion:
             return {
                 'success': True,
-                'type': 'habit_already_completed',
-                'description': f"Habit '{habit.name}' was already marked complete for {completion_date}",
+                'type': 'commitment_already_completed',
+                'description': f"'{commitment.task_description}' was already marked complete for {completion_date}",
                 'user_visible': True
             }
         
-        # Create habit log
-        completion_datetime = time_service.now()
-        if habit_action.completion_date and habit_action.completion_date != date.today():
-            # Use the specified date with current time
-            completion_datetime = completion_datetime.replace(
-                year=habit_action.completion_date.year,
-                month=habit_action.completion_date.month,
-                day=habit_action.completion_date.day
-            )
-        
-        habit_log = models.HabitLog(
-            habit_id=habit.id,
-            completed_at=completion_datetime
+        # Create completion record
+        completion_record = models.CommitmentCompletion(
+            commitment_id=commitment.id,
+            user_id=user_id,
+            completion_date=completion_date,
+            completed_at=time_service.now(),
+            notes=habit_action.notes,
+            skipped=False
         )
         
-        db.add(habit_log)
+        db.add(completion_record)
         
-        # Create description based on whether habit was auto-created
+        # Update commitment stats
+        commitment.completion_count += 1
+        commitment.last_completed_at = time_service.now()
+        
+        # Create description based on whether commitment was auto-created
         if was_auto_created:
-            description = f"Created and logged completion of new habit '{habit.name}'"
+            description = f"Created and logged completion of new recurring commitment '{commitment.task_description}'"
         else:
-            description = f"Logged completion of '{habit.name}'"
+            description = f"Logged completion of '{commitment.task_description}'"
         
         return {
             'success': True,
-            'type': 'habit_completed',
+            'type': 'commitment_completed',
             'description': description,
             'data': {
-                'habit_id': habit.id,
-                'habit_name': habit.name,
+                'commitment_id': commitment.id,
+                'task_description': commitment.task_description,
                 'completion_date': completion_date.isoformat(),
                 'notes': habit_action.notes,
-                'was_auto_created': was_auto_created
+                'was_auto_created': was_auto_created,
+                'is_recurring': True
             },
             'user_visible': True
         }
     
-    async def _create_new_habit(
+    async def _create_new_recurring_commitment(
         self,
         habit_action: HabitAction,
         user_id: int,
         db: Session
     ) -> Dict[str, Any]:
-        """Create a new habit"""
+        """Create a new recurring commitment (formerly habit creation)"""
         if not habit_action.new_habit_details:
             return {
                 'success': False,
-                'error': "No habit details provided for new habit creation",
+                'error': "No details provided for new recurring commitment creation",
                 'user_visible': False
             }
         
         details = habit_action.new_habit_details
-        habit_name = details.get('name', habit_action.habit_identifier)
+        commitment_name = details.get('name', habit_action.habit_identifier)
         
-        # Check if habit already exists
-        existing = db.query(models.Habit).filter(
-            models.Habit.user_id == user_id,
-            models.Habit.name.ilike(habit_name),
-            models.Habit.is_active == 1
+        # Check if recurring commitment already exists
+        existing = db.query(models.Commitment).filter(
+            models.Commitment.user_id == user_id,
+            models.Commitment.task_description.ilike(commitment_name),
+            models.Commitment.recurrence_pattern != "none",
+            models.Commitment.status == "active"
         ).first()
         
         if existing:
             return {
                 'success': False,
-                'error': f"Habit '{habit_name}' already exists",
+                'error': f"Recurring commitment '{commitment_name}' already exists",
                 'user_visible': True,
-                'description': f"You already have a habit called '{habit_name}'"
+                'description': f"You already have a recurring commitment called '{commitment_name}'"
             }
         
-        # Create new habit
-        new_habit = models.Habit(
+        # Create new recurring commitment
+        recurrence_pattern = details.get('frequency', 'daily')
+        if recurrence_pattern not in ['daily', 'weekly', 'monthly']:
+            recurrence_pattern = 'daily'  # fallback
+        
+        new_commitment = models.Commitment(
             user_id=user_id,
-            name=habit_name,
-            frequency=details.get('frequency', 'daily'),
-            reminder_time=details.get('reminder_time'),
-            is_active=1,
-            created_at=time_service.now()
+            task_description=commitment_name,
+            recurrence_pattern=recurrence_pattern,
+            recurrence_interval=1,
+            due_time=details.get('reminder_time'),
+            status='active',
+            completion_count=0,
+            created_at=time_service.now(),
+            original_message="Created via AI interaction"
         )
         
-        db.add(new_habit)
+        db.add(new_commitment)
         
         return {
             'success': True,
-            'type': 'habit_created',
-            'description': f"Created new habit: {habit_name}",
+            'type': 'recurring_commitment_created',
+            'description': f"Created new recurring commitment: {commitment_name}",
             'data': {
-                'habit_name': habit_name,
-                'frequency': details.get('frequency', 'daily')
+                'task_description': commitment_name,
+                'recurrence_pattern': recurrence_pattern,
+                'is_recurring': True
             },
             'user_visible': True
         }
     
-    async def _update_habit_schedule(
+    async def _update_commitment_schedule(
         self,
         habit_action: HabitAction,
         user_id: int,
         db: Session
     ) -> Dict[str, Any]:
-        """Update habit schedule/settings"""
-        # Find the habit
-        habit = db.query(models.Habit).filter(
-            models.Habit.user_id == user_id,
-            models.Habit.name.ilike(f"%{habit_action.habit_identifier}%"),
-            models.Habit.is_active == 1
+        """Update recurring commitment schedule/settings (formerly habit update)"""
+        # Find the recurring commitment
+        commitment = db.query(models.Commitment).filter(
+            models.Commitment.user_id == user_id,
+            models.Commitment.task_description.ilike(f"%{habit_action.habit_identifier}%"),
+            models.Commitment.recurrence_pattern != "none",
+            models.Commitment.status == "active"
         ).first()
         
-        if not habit:
+        if not commitment:
             return {
                 'success': False,
-                'error': f"Habit '{habit_action.habit_identifier}' not found",
+                'error': f"Recurring commitment '{habit_action.habit_identifier}' not found",
                 'user_visible': True
             }
         
-        # Update habit details
+        # Update commitment details
         updated_fields = []
         details = habit_action.details
         
         if 'frequency' in details:
-            habit.frequency = details['frequency']
-            updated_fields.append('frequency')
+            frequency = details['frequency']
+            if frequency in ['daily', 'weekly', 'monthly']:
+                commitment.recurrence_pattern = frequency
+                updated_fields.append('frequency')
         
         if 'reminder_time' in details:
-            habit.reminder_time = details['reminder_time']
+            commitment.due_time = details['reminder_time']
             updated_fields.append('reminder time')
         
         return {
             'success': True,
-            'type': 'habit_updated',
-            'description': f"Updated {habit.name}: {', '.join(updated_fields)}",
+            'type': 'recurring_commitment_updated',
+            'description': f"Updated {commitment.task_description}: {', '.join(updated_fields)}",
             'user_visible': True
         }
     

@@ -37,9 +37,8 @@ export default function DashboardLayout({
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Your Profile', href: '/dashboard/profile', icon: User },
-    { name: 'Habits', href: '/dashboard/habits', icon: Target },
     { name: 'Commitments', href: '/dashboard/commitments', icon: CheckSquare },
-    { name: 'People', href: '/dashboard/people', icon: Users },
+    { name:'People', href: '/dashboard/people', icon: Users },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];
 

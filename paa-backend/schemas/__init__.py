@@ -22,6 +22,7 @@ from .base import (
     HabitAnalytics, MoodAnalytics,
     # Commitment schemas
     CommitmentBase, CommitmentCreate, CommitmentUpdate, Commitment,
+    CommitmentCompletionBase, CommitmentCompletionCreate, CommitmentCompletion,
     # ProactiveMessage schemas
     ProactiveMessageBase, ProactiveMessageCreate, ProactiveMessageResponse, ProactiveMessage,
     # ScheduledPrompt schemas
@@ -56,6 +57,7 @@ __all__ = [
     'UserProfileBase', 'UserProfileCreate', 'UserProfileUpdate', 'UserProfile',
     'HabitAnalytics', 'MoodAnalytics',
     'CommitmentBase', 'CommitmentCreate', 'CommitmentUpdate', 'Commitment',
+    'CommitmentCompletionBase', 'CommitmentCompletionCreate', 'CommitmentCompletion',
     'ProactiveMessageBase', 'ProactiveMessageCreate', 'ProactiveMessageResponse', 'ProactiveMessage',
     'ScheduledPromptBase', 'ScheduledPromptCreate', 'ScheduledPromptUpdate', 'ScheduledPrompt',
     'TimeMultiplierRequest', 'FakeTimeStartRequest',

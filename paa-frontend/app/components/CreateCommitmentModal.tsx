@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Save, Loader2, Calendar, AlertCircle, Plus } from 'lucide-react';
+import { X, Save, Loader2, Calendar, AlertCircle, Plus, Repeat, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { commitmentAPI, CommitmentUpdate } from '@/lib/api/commitments';
 
 interface CreateCommitmentModalProps {
   isOpen: boolean;
@@ -17,7 +18,11 @@ export default function CreateCommitmentModal({
 }: CreateCommitmentModalProps) {
   const [formData, setFormData] = useState({
     task_description: '',
-    deadline: ''
+    deadline: '',
+    recurrence_pattern: 'none' as 'none' | 'daily' | 'weekly' | 'monthly' | 'custom',
+    due_time: '',
+    recurrence_days: [] as string[],
+    recurrence_interval: 1
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -27,7 +32,11 @@ export default function CreateCommitmentModal({
     if (!isOpen) {
       setFormData({
         task_description: '',
-        deadline: ''
+        deadline: '',
+        recurrence_pattern: 'none',
+        due_time: '',
+        recurrence_days: [],
+        recurrence_interval: 1
       });
       setErrors({});
     }
@@ -40,14 +49,22 @@ export default function CreateCommitmentModal({
       newErrors.task_description = 'Task description is required';
     }
 
-    if (formData.deadline) {
-      const selectedDate = new Date(formData.deadline);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (selectedDate < today) {
-        newErrors.deadline = 'Deadline cannot be in the past';
+    // For one-time commitments
+    if (formData.recurrence_pattern === 'none') {
+      if (formData.deadline) {
+        const selectedDate = new Date(formData.deadline);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (selectedDate < today) {
+          newErrors.deadline = 'Deadline cannot be in the past';
+        }
       }
+    }
+
+    // For weekly recurring commitments
+    if (formData.recurrence_pattern === 'weekly' && formData.recurrence_days.length === 0) {
+      newErrors.recurrence_days = 'Please select at least one day for weekly recurrence';
     }
 
     setErrors(newErrors);
@@ -63,12 +80,49 @@ export default function CreateCommitmentModal({
 
     setIsLoading(true);
     try {
-      // Note: We need to create a commitment through the chat system or add a direct API endpoint
-      // For now, we'll show a helpful message to use the chat
-      toast.info('Create commitments by telling your AI assistant what you want to do!', {
-        description: 'Try saying something like "I need to do laundry by tomorrow" in the chat.'
+      // Prepare commitment data
+      const commitmentData: CommitmentUpdate = {
+        task_description: formData.task_description.trim(),
+        recurrence_pattern: formData.recurrence_pattern,
+        recurrence_interval: formData.recurrence_interval,
+        due_time: formData.due_time || undefined
+      };
+
+      // Set deadline for one-time commitments
+      if (formData.recurrence_pattern === 'none' && formData.deadline) {
+        commitmentData.deadline = formData.deadline;
+      }
+
+      // Set recurrence days for weekly pattern
+      if (formData.recurrence_pattern === 'weekly' && formData.recurrence_days.length > 0) {
+        commitmentData.recurrence_days = formData.recurrence_days.join(',');
+      }
+
+      // Create commitment
+      const response = await fetch('/api/commitments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(commitmentData)
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to create commitment');
+      }
+
+      const isRecurring = formData.recurrence_pattern !== 'none';
+      toast.success(
+        `${isRecurring ? 'Recurring commitment' : 'Commitment'} created successfully! 🎉`,
+        {
+          description: isRecurring 
+            ? `Your ${formData.recurrence_pattern} commitment is now active.`
+            : 'You can track its progress in the commitments list.'
+        }
+      );
       
+      onUpdate(); // Refresh the commitments list
       onClose();
     } catch (error) {
       console.error('Error creating commitment:', error);
@@ -77,6 +131,26 @@ export default function CreateCommitmentModal({
       setIsLoading(false);
     }
   };
+
+  // Helper functions
+  const handleDayToggle = (day: string) => {
+    setFormData(prev => ({
+      ...prev,
+      recurrence_days: prev.recurrence_days.includes(day)
+        ? prev.recurrence_days.filter(d => d !== day)
+        : [...prev.recurrence_days, day]
+    }));
+  };
+
+  const weekDays = [
+    { key: 'mon', label: 'Mon' },
+    { key: 'tue', label: 'Tue' },
+    { key: 'wed', label: 'Wed' },
+    { key: 'thu', label: 'Thu' },
+    { key: 'fri', label: 'Fri' },
+    { key: 'sat', label: 'Sat' },
+    { key: 'sun', label: 'Sun' }
+  ];
 
   if (!isOpen) {
     return null;
@@ -100,28 +174,6 @@ export default function CreateCommitmentModal({
           </button>
         </div>
 
-        {/* Info message */}
-        <div className="p-6 pb-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-start gap-3">
-              <div className="text-blue-600 mt-0.5">
-                <AlertCircle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-blue-900 mb-1">
-                  Pro Tip: Use the AI Chat
-                </h3>
-                <p className="text-sm text-blue-700">
-                  The easiest way to create commitments is by talking to your AI assistant in the chat panel. 
-                  Just tell it what you want to do and when, like:
-                </p>
-                <div className="mt-2 text-sm text-blue-800 font-mono bg-blue-100 rounded px-2 py-1">
-                  "I need to call mom by Friday"
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
@@ -139,7 +191,7 @@ export default function CreateCommitmentModal({
                 errors.task_description ? 'border-red-300' : 'border-gray-300'
               }`}
               rows={3}
-              placeholder="e.g., Call mom, Do laundry, Submit report..."
+              placeholder="e.g., Exercise for 30 minutes, Call mom, Submit report..."
             />
             {errors.task_description && (
               <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
@@ -149,31 +201,100 @@ export default function CreateCommitmentModal({
             )}
           </div>
 
-          {/* Deadline */}
+          {/* Recurrence Pattern */}
           <div>
-            <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
-              Deadline (Optional)
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Repeat className="inline h-4 w-4 mr-1" />
+              Recurrence
             </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <select
+              value={formData.recurrence_pattern}
+              onChange={(e) => setFormData({ ...formData, recurrence_pattern: e.target.value as any })}
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-50"
+            >
+              <option value="none">One-time commitment</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+
+          {/* Weekly Days Selection */}
+          {formData.recurrence_pattern === 'weekly' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Days
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {weekDays.map((day) => (
+                  <button
+                    key={day.key}
+                    type="button"
+                    onClick={() => handleDayToggle(day.key)}
+                    disabled={isLoading}
+                    className={`px-3 py-1 text-sm rounded-full border transition-colors disabled:opacity-50 ${
+                      formData.recurrence_days.includes(day.key)
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+              {errors.recurrence_days && (
+                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {errors.recurrence_days}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Due Time for recurring commitments */}
+          {formData.recurrence_pattern !== 'none' && (
+            <div>
+              <label htmlFor="due_time" className="block text-sm font-medium text-gray-700 mb-1">
+                <Clock className="inline h-4 w-4 mr-1" />
+                Due Time (Optional)
+              </label>
+              <input
+                type="time"
+                id="due_time"
+                value={formData.due_time}
+                onChange={(e) => setFormData({ ...formData, due_time: e.target.value })}
+                disabled={isLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-50"
+              />
+            </div>
+          )}
+
+          {/* Deadline for one-time commitments */}
+          {formData.recurrence_pattern === 'none' && (
+            <div>
+              <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
+                <Calendar className="inline h-4 w-4 mr-1" />
+                Deadline (Optional)
+              </label>
               <input
                 type="date"
                 id="deadline"
                 value={formData.deadline}
                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                 disabled={isLoading}
-                className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-50 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-50 ${
                   errors.deadline ? 'border-red-300' : 'border-gray-300'
                 }`}
               />
+              {errors.deadline && (
+                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {errors.deadline}
+                </p>
+              )}
             </div>
-            {errors.deadline && (
-              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle className="h-4 w-4" />
-                {errors.deadline}
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">
@@ -199,7 +320,7 @@ export default function CreateCommitmentModal({
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  Use Chat Instead
+                  Create Commitment
                 </>
               )}
             </button>

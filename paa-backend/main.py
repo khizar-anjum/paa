@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta, date
-from sqlalchemy import func, and_, cast, Date
+from sqlalchemy import func, and_, or_, cast, Date
 from collections import defaultdict
 import os
 import logging
@@ -164,199 +164,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
-# Habits endpoints
-@app.get("/habits", response_model=List[schemas.Habit])
-def get_habits(
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    habits = db.query(models.Habit).filter(
-        models.Habit.user_id == current_user.id,
-        models.Habit.is_active == 1
-    ).all()
-    
-    # Add stats to each habit
-    for habit in habits:
-        # Check if completed today
-        today_start = datetime.combine(time_service.now().date(), datetime.min.time())
-        habit.completed_today = db.query(models.HabitLog).filter(
-            models.HabitLog.habit_id == habit.id,
-            models.HabitLog.completed_at >= today_start
-        ).first() is not None
-        
-        # Get streak
-        logs = db.query(models.HabitLog).filter(
-            models.HabitLog.habit_id == habit.id
-        ).order_by(models.HabitLog.completed_at.desc()).limit(30).all()
-        
-        current_streak = 0
-        if logs:
-            check_date = time_service.now().date()
-            for log in logs:
-                log_date = log.completed_at.date()
-                if log_date == check_date or (current_streak == 0 and log_date == check_date - timedelta(days=1)):
-                    current_streak += 1
-                    check_date = log_date - timedelta(days=1)
-                else:
-                    break
-        
-        habit.current_streak = current_streak
-    
-    return habits
+# Habits endpoints - REMOVED in unified system migration
+# All habit functionality moved to unified commitments system
 
-@app.post("/habits", response_model=schemas.Habit)
-def create_habit(
-    habit: schemas.HabitCreate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    db_habit = models.Habit(
-        **habit.dict(),
-        user_id=current_user.id
-    )
-    db.add(db_habit)
-    db.commit()
-    db.refresh(db_habit)
-    
-    # Embed the new habit for semantic search
-    try:
-        vector_store.embed_habit(db_habit, db)
-    except Exception as e:
-        debug_logger.warning(f"Failed to embed habit {db_habit.id}: {e}")
-    
-    return db_habit
 
-# Add habit completion endpoint
-@app.post("/habits/{habit_id}/complete")
-def complete_habit(
-    habit_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # Verify habit belongs to user
-    habit = db.query(models.Habit).filter(
-        models.Habit.id == habit_id,
-        models.Habit.user_id == current_user.id
-    ).first()
-    
-    if not habit:
-        raise HTTPException(status_code=404, detail="Habit not found")
-    
-    # Check if already completed today
-    today_start = datetime.combine(time_service.now().date(), datetime.min.time())
-    existing_log = db.query(models.HabitLog).filter(
-        models.HabitLog.habit_id == habit_id,
-        models.HabitLog.completed_at >= today_start
-    ).first()
-    
-    if existing_log:
-        raise HTTPException(status_code=400, detail="Habit already completed today")
-    
-    # Create completion log
-    log = models.HabitLog(habit_id=habit_id)
-    db.add(log)
-    db.commit()
-    
-    return {"message": "Habit completed!", "completed_at": log.completed_at}
-
-# Add habit stats endpoint
-@app.get("/habits/{habit_id}/stats")
-def get_habit_stats(
-    habit_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # Verify habit belongs to user
-    habit = db.query(models.Habit).filter(
-        models.Habit.id == habit_id,
-        models.Habit.user_id == current_user.id
-    ).first()
-    
-    if not habit:
-        raise HTTPException(status_code=404, detail="Habit not found")
-    
-    # Calculate stats
-    total_completions = db.query(func.count(models.HabitLog.id)).filter(
-        models.HabitLog.habit_id == habit_id
-    ).scalar()
-    
-    # Calculate current streak
-    logs = db.query(models.HabitLog).filter(
-        models.HabitLog.habit_id == habit_id
-    ).order_by(models.HabitLog.completed_at.desc()).all()
-    
-    current_streak = 0
-    if logs:
-        check_date = date.today()
-        for log in logs:
-            log_date = log.completed_at.date()
-            if log_date == check_date:
-                current_streak += 1
-                check_date -= timedelta(days=1)
-            elif log_date == check_date - timedelta(days=1):
-                current_streak += 1
-                check_date = log_date - timedelta(days=1)
-            else:
-                break
-    
-    # Check if completed today
-    today_start = datetime.combine(time_service.now().date(), datetime.min.time())
-    completed_today = db.query(models.HabitLog).filter(
-        models.HabitLog.habit_id == habit_id,
-        models.HabitLog.completed_at >= today_start
-    ).first() is not None
-    
-    return {
-        "habit_id": habit_id,
-        "total_completions": total_completions,
-        "current_streak": current_streak,
-        "completed_today": completed_today
-    }
-
-# Update habit endpoint
-@app.put("/habits/{habit_id}", response_model=schemas.Habit)
-def update_habit(
-    habit_id: int,
-    habit_update: schemas.HabitCreate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    habit = db.query(models.Habit).filter(
-        models.Habit.id == habit_id,
-        models.Habit.user_id == current_user.id
-    ).first()
-    
-    if not habit:
-        raise HTTPException(status_code=404, detail="Habit not found")
-    
-    # Update habit fields
-    for field, value in habit_update.dict().items():
-        setattr(habit, field, value)
-    
-    db.commit()
-    db.refresh(habit)
-    return habit
-
-# Delete habit endpoint
-@app.delete("/habits/{habit_id}")
-def delete_habit(
-    habit_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    habit = db.query(models.Habit).filter(
-        models.Habit.id == habit_id,
-        models.Habit.user_id == current_user.id
-    ).first()
-    
-    if not habit:
-        raise HTTPException(status_code=404, detail="Habit not found")
-    
-    # Soft delete
-    habit.is_active = 0
-    db.commit()
-    
-    return {"message": "Habit deleted successfully"}
 
 # Enhanced Chat endpoint with AI integration
 @app.post("/chat", response_model=schemas.ChatResponse)
@@ -366,10 +177,11 @@ async def chat(
     db: Session = Depends(get_db)
 ):
     try:
-        # Get user context
-        habits = db.query(models.Habit).filter(
-            models.Habit.user_id == current_user.id,
-            models.Habit.is_active == 1
+        # Get user context - using unified commitments system
+        recurring_commitments = db.query(models.Commitment).filter(
+            models.Commitment.user_id == current_user.id,
+            models.Commitment.recurrence_pattern != "none",
+            models.Commitment.status == "active"
         ).all()
         
         # Get recent check-ins
@@ -382,21 +194,21 @@ async def chat(
             models.Conversation.user_id == current_user.id
         ).order_by(models.Conversation.timestamp.desc()).limit(5).all()
         
-        # Build context
+        # Build context - recurring commitments (formerly habits)
         habit_context = []
-        for habit in habits:
-            # Check completion status
-            today_start = datetime.combine(time_service.now().date(), datetime.min.time())
-            completed_today = db.query(models.HabitLog).filter(
-                models.HabitLog.habit_id == habit.id,
-                models.HabitLog.completed_at >= today_start
+        today = date.today()
+        for commitment in recurring_commitments:
+            # Check completion status for today
+            completed_today = db.query(models.CommitmentCompletion).filter(
+                models.CommitmentCompletion.commitment_id == commitment.id,
+                models.CommitmentCompletion.completion_date == today
             ).first() is not None
             
             habit_context.append({
-                "name": habit.name,
-                "frequency": habit.frequency,
+                "name": commitment.task_description,
+                "frequency": commitment.recurrence_pattern,
                 "completed_today": completed_today,
-                "reminder_time": habit.reminder_time
+                "reminder_time": commitment.due_time.strftime("%H:%M") if commitment.due_time else None
             })
         
         mood_context = []
@@ -984,9 +796,16 @@ def get_commitments(
     overdue: Optional[bool] = None,
     sort_by: Optional[str] = "created_at",
     order: Optional[str] = "desc",
+    type: Optional[str] = None,  # all, one-time, recurring
+    recurrence: Optional[str] = None,  # none, daily, weekly, monthly
+    due: Optional[str] = None,  # today, this-week, overdue, upcoming
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Get commitments with comprehensive filtering for unified system
+    Supports both one-time and recurring commitments (formerly habits)
+    """
     query = db.query(models.Commitment).filter(
         models.Commitment.user_id == current_user.id
     )
@@ -995,9 +814,61 @@ def get_commitments(
     if status:
         query = query.filter(models.Commitment.status == status)
     
-    # Filter by overdue status
+    # Filter by type (unified system)
+    if type == "one-time":
+        query = query.filter(models.Commitment.recurrence_pattern == "none")
+    elif type == "recurring":
+        query = query.filter(models.Commitment.recurrence_pattern != "none")
+    
+    # Filter by specific recurrence pattern
+    if recurrence:
+        query = query.filter(models.Commitment.recurrence_pattern == recurrence)
+    
+    # Filter by due date
+    today = date.today()
+    if due == "today":
+        # One-time due today OR recurring that should be done today
+        query = query.filter(
+            or_(
+                and_(
+                    models.Commitment.recurrence_pattern == "none",
+                    models.Commitment.deadline == today
+                ),
+                and_(
+                    models.Commitment.recurrence_pattern != "none",
+                    models.Commitment.status == "active"
+                )
+            )
+        )
+    elif due == "this-week":
+        week_end = today + timedelta(days=7)
+        query = query.filter(
+            or_(
+                and_(
+                    models.Commitment.recurrence_pattern == "none",
+                    models.Commitment.deadline.between(today, week_end)
+                ),
+                and_(
+                    models.Commitment.recurrence_pattern != "none",
+                    models.Commitment.status == "active"
+                )
+            )
+        )
+    elif due == "overdue":
+        query = query.filter(
+            models.Commitment.recurrence_pattern == "none",
+            models.Commitment.deadline < today,
+            models.Commitment.status == "pending"
+        )
+    elif due == "upcoming":
+        query = query.filter(
+            models.Commitment.recurrence_pattern == "none",
+            models.Commitment.deadline > today,
+            models.Commitment.status == "pending"
+        )
+    
+    # Legacy overdue filter (for backward compatibility)
     if overdue is not None:
-        today = date.today()
         if overdue:
             query = query.filter(
                 models.Commitment.deadline < today,
@@ -1019,15 +890,42 @@ def get_commitments(
             query = query.order_by(models.Commitment.created_at.asc())
         else:
             query = query.order_by(models.Commitment.created_at.desc())
+    elif sort_by == "completion_count":
+        if order == "asc":
+            query = query.order_by(models.Commitment.completion_count.asc())
+        else:
+            query = query.order_by(models.Commitment.completion_count.desc())
     
-    return query.all()
+    commitments = query.all()
+    
+    # Add computed fields
+    for commitment in commitments:
+        commitment.is_recurring = commitment.recurrence_pattern != "none"
+        
+        # Check if completed today (for recurring commitments)
+        if commitment.is_recurring:
+            completion = db.query(models.CommitmentCompletion).filter(
+                models.CommitmentCompletion.commitment_id == commitment.id,
+                models.CommitmentCompletion.completion_date == today
+            ).first()
+            commitment.completed_today = completion is not None
+        else:
+            commitment.completed_today = False
+    
+    return commitments
 
 @app.post("/commitments/{commitment_id}/complete")
 def complete_commitment(
     commitment_id: int,
+    completion_data: schemas.CommitmentCompletionCreate = None,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Mark a commitment as completed (unified system)
+    For one-time commitments: marks as completed
+    For recurring commitments: logs completion for today
+    """
     commitment = db.query(models.Commitment).filter(
         models.Commitment.id == commitment_id,
         models.Commitment.user_id == current_user.id
@@ -1035,9 +933,43 @@ def complete_commitment(
     if not commitment:
         raise HTTPException(status_code=404, detail="Commitment not found")
     
-    commitment.status = "completed"
+    if commitment.recurrence_pattern == "none":
+        # One-time commitment - mark as completed
+        commitment.status = "completed"
+        db.commit()
+        return {"message": "Commitment marked as completed"}
+    else:
+        # Recurring commitment - log completion for today
+        today = completion_data.completion_date if completion_data and completion_data.completion_date else date.today()
+        
+        # Check if already completed for this date
+        existing = db.query(models.CommitmentCompletion).filter(
+            models.CommitmentCompletion.commitment_id == commitment_id,
+            models.CommitmentCompletion.completion_date == today
+        ).first()
+        
+        if existing:
+            return {"message": f"Commitment already completed for {today}"}
+        
+        # Create completion record
+        completion = models.CommitmentCompletion(
+            commitment_id=commitment_id,
+            user_id=current_user.id,
+            completion_date=today,
+            notes=completion_data.notes if completion_data else None,
+            skipped=False
+        )
+        db.add(completion)
+        
+        # Update commitment stats
+        commitment.completion_count += 1
+        commitment.last_completed_at = datetime.utcnow()
+        
+        db.commit()
+        return {"message": f"Recurring commitment completed for {today}"}
+    
     db.commit()
-    return {"message": "Commitment marked as completed"}
+    return {"message": "Commitment completed"}
 
 @app.post("/commitments/{commitment_id}/dismiss")
 def dismiss_commitment(
@@ -1117,6 +1049,112 @@ def delete_commitment(
     db.delete(commitment)
     db.commit()
     return {"message": "Commitment deleted"}
+
+# New unified system endpoints
+@app.post("/commitments/{commitment_id}/skip")
+def skip_commitment(
+    commitment_id: int,
+    skip_data: dict = {},
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Skip a recurring commitment for today"""
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    if commitment.recurrence_pattern == "none":
+        raise HTTPException(status_code=400, detail="Cannot skip one-time commitment")
+    
+    today = date.today()
+    
+    # Check if already completed or skipped for this date
+    existing = db.query(models.CommitmentCompletion).filter(
+        models.CommitmentCompletion.commitment_id == commitment_id,
+        models.CommitmentCompletion.completion_date == today
+    ).first()
+    
+    if existing:
+        if existing.skipped:
+            return {"message": f"Commitment already skipped for {today}"}
+        else:
+            return {"message": f"Commitment already completed for {today}"}
+    
+    # Create skip record
+    skip_record = models.CommitmentCompletion(
+        commitment_id=commitment_id,
+        user_id=current_user.id,
+        completion_date=today,
+        notes=skip_data.get("reason", "Skipped"),
+        skipped=True
+    )
+    db.add(skip_record)
+    db.commit()
+    
+    return {"message": f"Commitment skipped for {today}"}
+
+@app.get("/commitments/{commitment_id}/completions", response_model=List[schemas.CommitmentCompletion])
+def get_commitment_completions(
+    commitment_id: int,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get completion history for a commitment"""
+    commitment = db.query(models.Commitment).filter(
+        models.Commitment.id == commitment_id,
+        models.Commitment.user_id == current_user.id
+    ).first()
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+    
+    query = db.query(models.CommitmentCompletion).filter(
+        models.CommitmentCompletion.commitment_id == commitment_id
+    )
+    
+    if start_date:
+        query = query.filter(models.CommitmentCompletion.completion_date >= start_date)
+    if end_date:
+        query = query.filter(models.CommitmentCompletion.completion_date <= end_date)
+    
+    return query.order_by(models.CommitmentCompletion.completion_date.desc()).all()
+
+@app.post("/commitments", response_model=schemas.Commitment)
+def create_commitment(
+    commitment: schemas.CommitmentCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new commitment (one-time or recurring)"""
+    db_commitment = models.Commitment(
+        user_id=current_user.id,
+        task_description=commitment.task_description,
+        original_message=commitment.original_message,
+        deadline=commitment.deadline,
+        recurrence_pattern=commitment.recurrence_pattern,
+        recurrence_interval=commitment.recurrence_interval,
+        recurrence_days=commitment.recurrence_days,
+        recurrence_end_date=commitment.recurrence_end_date,
+        due_time=commitment.due_time,
+        reminder_settings=commitment.reminder_settings,
+        status="active" if commitment.recurrence_pattern != "none" else "pending",
+        completion_count=0,
+        created_from_conversation_id=commitment.created_from_conversation_id
+    )
+    
+    db.add(db_commitment)
+    db.commit()
+    db.refresh(db_commitment)
+    
+    # Add computed fields
+    db_commitment.is_recurring = db_commitment.recurrence_pattern != "none"
+    db_commitment.completed_today = False
+    
+    return db_commitment
 
 @app.get("/commitments/{commitment_id}/reminders", response_model=List[schemas.ProactiveMessage])
 def get_commitment_reminders(
@@ -1431,63 +1469,8 @@ async def delete_session(
 
 
 # Analytics endpoints
-@app.get("/analytics/habits")
-def get_habits_analytics(
-    days: int = 30,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # Get habits with completion data
-    habits = db.query(models.Habit).filter(
-        models.Habit.user_id == current_user.id,
-        models.Habit.is_active == 1
-    ).all()
-    
-    # Calculate date range
-    end_date = time_service.now().date()
-    start_date = end_date - timedelta(days=days)
-    
-    analytics_data = []
-    
-    for habit in habits:
-        # Get completion logs for this period
-        logs = db.query(models.HabitLog).filter(
-            models.HabitLog.habit_id == habit.id,
-            cast(models.HabitLog.completed_at, Date) >= start_date,
-            cast(models.HabitLog.completed_at, Date) <= end_date
-        ).all()
-        
-        # Group by date
-        completions_by_date = defaultdict(int)
-        for log in logs:
-            log_date = log.completed_at.date()
-            completions_by_date[log_date] = 1
-        
-        # Create daily data
-        daily_data = []
-        current_date = start_date
-        while current_date <= end_date:
-            daily_data.append({
-                "date": current_date.isoformat(),
-                "completed": completions_by_date.get(current_date, 0)
-            })
-            current_date += timedelta(days=1)
-        
-        # Calculate stats
-        total_days = days
-        completed_days = len([d for d in daily_data if d["completed"] > 0])
-        completion_rate = (completed_days / total_days) * 100 if total_days > 0 else 0
-        
-        analytics_data.append({
-            "habit_id": habit.id,
-            "habit_name": habit.name,
-            "completion_rate": round(completion_rate, 1),
-            "total_completions": completed_days,
-            "total_days": total_days,
-            "daily_data": daily_data
-        })
-    
-    return analytics_data
+# Habits analytics endpoint - REMOVED in unified system migration
+# Use /commitments/analytics/completion-rates instead
 
 @app.get("/analytics/mood")
 def get_mood_analytics(
@@ -1543,46 +1526,49 @@ def get_overview_analytics(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Habits overview
-    total_habits = db.query(func.count(models.Habit.id)).filter(
-        models.Habit.user_id == current_user.id,
-        models.Habit.is_active == 1
+    # Recurring commitments overview (unified system)
+    total_habits = db.query(func.count(models.Commitment.id)).filter(
+        models.Commitment.user_id == current_user.id,
+        models.Commitment.recurrence_pattern != "none",
+        models.Commitment.status == "active"
     ).scalar()
     
     # Completed today
-    today_start = datetime.combine(time_service.now().date(), datetime.min.time())
+    today = time_service.now().date()
     completed_today = db.query(
-        func.count(func.distinct(models.HabitLog.habit_id))
-    ).join(models.Habit).filter(
-        models.Habit.user_id == current_user.id,
-        models.HabitLog.completed_at >= today_start
+        func.count(func.distinct(models.CommitmentCompletion.commitment_id))
+    ).join(models.Commitment).filter(
+        models.Commitment.user_id == current_user.id,
+        models.Commitment.recurrence_pattern != "none",
+        models.CommitmentCompletion.completion_date == today,
+        models.CommitmentCompletion.skipped == False
     ).scalar()
     
     # Current mood (today's latest checkin)
-    today = time_service.now().date()
-    # Use date() function instead of cast for SQLite compatibility
     today_checkin = db.query(models.DailyCheckIn).filter(
         models.DailyCheckIn.user_id == current_user.id,
         func.date(models.DailyCheckIn.timestamp) == today.isoformat()
     ).order_by(models.DailyCheckIn.timestamp.desc()).first()
     
-    # Longest streak (for all habits combined)
-    # This is simplified - could be enhanced
-    all_logs = db.query(models.HabitLog).join(models.Habit).filter(
-        models.Habit.user_id == current_user.id
-    ).order_by(models.HabitLog.completed_at.desc()).limit(365).all()
+    # Longest streak calculation - simplified for unified system
+    # Get all completions for recurring commitments
+    all_completions = db.query(models.CommitmentCompletion).join(models.Commitment).filter(
+        models.Commitment.user_id == current_user.id,
+        models.Commitment.recurrence_pattern != "none",
+        models.CommitmentCompletion.skipped == False
+    ).order_by(models.CommitmentCompletion.completion_date.desc()).limit(365).all()
     
     # Calculate longest streak of any activity
-    streak_days = set()
-    for log in all_logs:
-        streak_days.add(log.completed_at.date())
+    completion_days = set()
+    for completion in all_completions:
+        completion_days.add(completion.completion_date)
     
     longest_streak = 0
     current_streak = 0
     check_date = date.today()
     
     for i in range(365):  # Check last year
-        if check_date in streak_days:
+        if check_date in completion_days:
             current_streak += 1
             longest_streak = max(longest_streak, current_streak)
         else:

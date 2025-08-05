@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Filter, SortAsc, SortDesc } from 'lucide-react';
+import { Search, Filter, SortAsc, SortDesc, Repeat, Target } from 'lucide-react';
 import { CommitmentFilters as FilterType } from '@/lib/api/commitments';
 
 interface CommitmentFiltersProps {
@@ -27,9 +27,17 @@ export default function CommitmentFilters({
   const statusOptions = [
     { value: '', label: 'All' },
     { value: 'pending', label: 'Pending' },
+    { value: 'active', label: 'Active' },
     { value: 'completed', label: 'Completed' },
     { value: 'dismissed', label: 'Dismissed' },
     { value: 'missed', label: 'Missed' }
+  ];
+
+  // Type filter options
+  const typeOptions = [
+    { value: '', label: 'All Types', icon: null },
+    { value: 'one_time', label: 'One-time', icon: Target },
+    { value: 'recurring', label: 'Recurring', icon: Repeat }
   ];
   
   // Sort options
@@ -42,6 +50,13 @@ export default function CommitmentFilters({
     onFiltersChange({
       ...filters,
       status: status || undefined
+    });
+  };
+
+  const handleTypeChange = (type: string) => {
+    onFiltersChange({
+      ...filters,
+      type: type ? (type as 'one_time' | 'recurring') : undefined
     });
   };
   
@@ -71,7 +86,7 @@ export default function CommitmentFilters({
     onSearchChange('');
   };
   
-  const hasActiveFilters = filters.status || filters.overdue || searchQuery;
+  const hasActiveFilters = filters.status || filters.type || filters.overdue || searchQuery;
   
   return (
     <div className="space-y-4">
@@ -130,21 +145,51 @@ export default function CommitmentFilters({
         </button>
       </div>
       
-      {/* Status filter tabs */}
-      <div className="flex flex-wrap gap-2">
-        {statusOptions.map(option => (
-          <button
-            key={option.value}
-            onClick={() => handleStatusChange(option.value)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
-              (filters.status || '') === option.value
-                ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
+      {/* Status and Type filter tabs */}
+      <div className="space-y-3">
+        {/* Status filters */}
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Status</h4>
+          <div className="flex flex-wrap gap-2">
+            {statusOptions.map(option => (
+              <button
+                key={option.value}
+                onClick={() => handleStatusChange(option.value)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                  (filters.status || '') === option.value
+                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Type filters */}
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Type</h4>
+          <div className="flex flex-wrap gap-2">
+            {typeOptions.map(option => {
+              const IconComponent = option.icon;
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => handleTypeChange(option.value)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors flex items-center gap-1 ${
+                    (filters.type || '') === option.value
+                      ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+                  }`}
+                >
+                  {IconComponent && <IconComponent className="h-3 w-3" />}
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
       
       {/* Advanced filters */}

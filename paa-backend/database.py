@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean, Date, Time
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean, Date, Time, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -121,8 +121,33 @@ class Commitment(Base):
     reminder_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    # New recurrence fields
+    recurrence_pattern = Column(String(20), default="none")  # none, daily, weekly, monthly, custom
+    recurrence_interval = Column(Integer, default=1)  # Every N days/weeks/months
+    recurrence_days = Column(String(50))  # For weekly: "mon,wed,fri"
+    recurrence_end_date = Column(Date)  # Optional end date
+    due_time = Column(Time)  # Specific time of day
+    completion_count = Column(Integer, default=0)
+    last_completed_at = Column(DateTime)
+    reminder_settings = Column(JSON)  # Flexible reminder configuration
+    
     user = relationship("User", back_populates="commitments")
     conversation = relationship("Conversation")
+    completions = relationship("CommitmentCompletion", back_populates="commitment", cascade="all, delete-orphan")
+
+class CommitmentCompletion(Base):
+    __tablename__ = "commitment_completions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    commitment_id = Column(Integer, ForeignKey("commitments.id", ondelete="CASCADE"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    completed_at = Column(DateTime, default=datetime.utcnow)
+    completion_date = Column(Date, nullable=False)  # For grouping by day
+    notes = Column(Text)
+    skipped = Column(Boolean, default=False)  # For "missed" recurring items
+    
+    commitment = relationship("Commitment", back_populates="completions")
+    user = relationship("User")
 
 class ProactiveMessage(Base):
     __tablename__ = "proactive_messages"

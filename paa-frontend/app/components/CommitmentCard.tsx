@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit, Trash2, Check, Clock, MessageSquare, MoreHorizontal } from 'lucide-react';
+import { Edit, Trash2, Check, Clock, MessageSquare, MoreHorizontal, Repeat, Target, Flame, SkipForward, History } from 'lucide-react';
 import { Commitment, commitmentAPI, commitmentUtils } from '@/lib/api/commitments';
 import CommitmentStatusBadge from './CommitmentStatusBadge';
+import CommitmentCompletions from './CommitmentCompletions';
 import { toast } from 'sonner';
 
 interface CommitmentCardProps {
@@ -15,22 +16,51 @@ interface CommitmentCardProps {
 export default function CommitmentCard({ commitment, onUpdate, onEdit }: CommitmentCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const [showCompletions, setShowCompletions] = useState(false);
   
+  const isRecurring = commitmentUtils.isRecurring(commitment);
   const isOverdue = commitmentUtils.isOverdue(commitment);
   const isDueToday = commitmentUtils.isDueToday(commitment);
   const deadlineText = commitmentUtils.formatDeadline(commitment);
-  const canComplete = commitment.status === 'pending';
+  const recurrenceText = commitmentUtils.formatRecurrence(commitment);
+  const streakInfo = commitmentUtils.getStreakInfo(commitment);
+  
+  // For recurring commitments, can complete if active and not completed today
+  // For one-time commitments, can complete if pending
+  const canComplete = isRecurring 
+    ? (commitment.status === 'active' && !commitment.completed_today)
+    : (commitment.status === 'pending');
   
   // Handle complete commitment
   const handleComplete = async () => {
     setIsLoading(true);
     try {
       await commitmentAPI.completeCommitment(commitment.id);
-      toast.success('Commitment completed! 🎉');
+      const message = isRecurring 
+        ? 'Great job! Marked as completed for today 🎉'
+        : 'Commitment completed! 🎉';
+      toast.success(message);
       onUpdate();
     } catch (error) {
       toast.error('Failed to complete commitment');
       console.error('Error completing commitment:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle skip recurring commitment
+  const handleSkip = async () => {
+    if (!isRecurring) return;
+    
+    setIsLoading(true);
+    try {
+      await commitmentAPI.skipCommitment(commitment.id);
+      toast.success('Skipped for today');
+      onUpdate();
+    } catch (error) {
+      toast.error('Failed to skip commitment');
+      console.error('Error skipping commitment:', error);
     } finally {
       setIsLoading(false);
     }
@@ -107,9 +137,40 @@ export default function CommitmentCard({ commitment, onUpdate, onEdit }: Commitm
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-gray-900 truncate">
-            {commitment.task_description}
-          </h3>
+          <div className="flex items-center gap-2 mb-1">
+            {isRecurring && (
+              <Repeat className="h-4 w-4 text-blue-500 flex-shrink-0" />
+            )}
+            <h3 className="font-medium text-gray-900 truncate">
+              {commitment.task_description}
+            </h3>
+          </div>
+          {isRecurring && (
+            <div className="flex items-center flex-wrap gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <Target className="h-3 w-3" />
+                {recurrenceText}
+              </span>
+              {deadlineText && (
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {deadlineText}
+                </span>
+              )}
+              {streakInfo.total > 0 && (
+                <span className="flex items-center gap-1">
+                  <Flame className="h-3 w-3 text-orange-500" />
+                  {streakInfo.total} completed
+                </span>
+              )}
+              {commitment.original_message && (
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="h-3 w-3" />
+                  From chat
+                </span>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-2">
@@ -138,8 +199,21 @@ export default function CommitmentCard({ commitment, onUpdate, onEdit }: Commitm
                   <Edit className="h-4 w-4" />
                   Edit
                 </button>
+
+                {isRecurring && (
+                  <button
+                    onClick={() => {
+                      setShowCompletions(true);
+                      setShowActions(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <History className="h-4 w-4" />
+                    View History
+                  </button>
+                )}
                 
-                {canComplete && (
+                {canComplete && !isRecurring && (
                   <button
                     onClick={() => {
                       handlePostpone();
@@ -149,6 +223,19 @@ export default function CommitmentCard({ commitment, onUpdate, onEdit }: Commitm
                   >
                     <Clock className="h-4 w-4" />
                     Postpone to Tomorrow
+                  </button>
+                )}
+                
+                {canComplete && isRecurring && (
+                  <button
+                    onClick={() => {
+                      handleSkip();
+                      setShowActions(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <SkipForward className="h-4 w-4" />
+                    Skip Today
                   </button>
                 )}
                 
@@ -170,10 +257,12 @@ export default function CommitmentCard({ commitment, onUpdate, onEdit }: Commitm
       
       {/* Deadline and details */}
       <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
-        <span className="flex items-center gap-1">
-          <Clock className="h-4 w-4" />
-          {deadlineText}
-        </span>
+        {!isRecurring && deadlineText && (
+          <span className="flex items-center gap-1">
+            <Clock className="h-4 w-4" />
+            {deadlineText}
+          </span>
+        )}
         
         {commitment.reminder_count > 0 && (
           <span className="text-xs text-gray-500">
@@ -181,7 +270,7 @@ export default function CommitmentCard({ commitment, onUpdate, onEdit }: Commitm
           </span>
         )}
         
-        {commitment.original_message && (
+        {commitment.original_message && !isRecurring && (
           <span className="flex items-center gap-1 text-xs text-gray-500">
             <MessageSquare className="h-3 w-3" />
             From chat
@@ -198,10 +287,21 @@ export default function CommitmentCard({ commitment, onUpdate, onEdit }: Commitm
             className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-md transition-colors disabled:opacity-50"
           >
             <Check className="h-4 w-4" />
-            Complete
+            {isRecurring ? 'Done Today' : 'Complete'}
           </button>
           
-          {(isOverdue || isDueToday) && (
+          {isRecurring && (
+            <button
+              onClick={handleSkip}
+              disabled={isLoading}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+            >
+              <SkipForward className="h-4 w-4" />
+              Skip Today
+            </button>
+          )}
+          
+          {!isRecurring && (isOverdue || isDueToday) && (
             <button
               onClick={handlePostpone}
               disabled={isLoading}
@@ -233,6 +333,13 @@ export default function CommitmentCard({ commitment, onUpdate, onEdit }: Commitm
           onClick={() => setShowActions(false)}
         />
       )}
+
+      {/* Completions Modal */}
+      <CommitmentCompletions
+        commitment={commitment}
+        isOpen={showCompletions}
+        onClose={() => setShowCompletions(false)}
+      />
     </div>
   );
 }

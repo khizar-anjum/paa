@@ -10,7 +10,6 @@ class DataUpdateEvents {
 
   // Event types
   static readonly COMMITMENT_UPDATED = 'commitment:updated';
-  static readonly HABIT_UPDATED = 'habit:updated';
   static readonly PROFILE_UPDATED = 'profile:updated';
   static readonly CHECKIN_UPDATED = 'checkin:updated';
   static readonly PROACTIVE_MESSAGE_UPDATED = 'proactive:updated';
@@ -63,7 +62,6 @@ export const dataUpdateEvents = new DataUpdateEvents();
 // Export event names for convenience
 export const DATA_EVENTS = {
   COMMITMENT_UPDATED: DataUpdateEvents.COMMITMENT_UPDATED,
-  HABIT_UPDATED: DataUpdateEvents.HABIT_UPDATED,
   PROFILE_UPDATED: DataUpdateEvents.PROFILE_UPDATED,
   CHECKIN_UPDATED: DataUpdateEvents.CHECKIN_UPDATED,
   PROACTIVE_MESSAGE_UPDATED: DataUpdateEvents.PROACTIVE_MESSAGE_UPDATED,

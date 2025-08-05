@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Save, Loader2, Calendar, AlertCircle } from 'lucide-react';
-import { Commitment, commitmentAPI } from '@/lib/api/commitments';
+import { X, Save, Loader2, Calendar, AlertCircle, Clock } from 'lucide-react';
+import { Commitment, commitmentAPI, commitmentUtils } from '@/lib/api/commitments';
 import { toast } from 'sonner';
 
 interface EditCommitmentModalProps {
@@ -21,6 +21,7 @@ export default function EditCommitmentModal({
   const [formData, setFormData] = useState({
     task_description: '',
     deadline: '',
+    due_time: '',
     status: 'pending'
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -32,6 +33,7 @@ export default function EditCommitmentModal({
       setFormData({
         task_description: commitment.task_description,
         deadline: commitment.deadline ? commitment.deadline.split('T')[0] : '',
+        due_time: commitment.due_time || '',
         status: commitment.status
       });
       setErrors({});
@@ -44,6 +46,7 @@ export default function EditCommitmentModal({
       setFormData({
         task_description: '',
         deadline: '',
+        due_time: '',
         status: 'pending'
       });
       setErrors({});
@@ -82,7 +85,8 @@ export default function EditCommitmentModal({
     try {
       await commitmentAPI.updateCommitment(commitment.id, {
         status: formData.status,
-        deadline: formData.deadline || undefined
+        deadline: formData.deadline || undefined,
+        due_time: formData.due_time || undefined
       });
       
       // Note: The API doesn't currently support updating task_description
@@ -170,31 +174,51 @@ export default function EditCommitmentModal({
             </p>
           </div>
 
-          {/* Deadline */}
-          <div>
-            <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
-              Deadline (Optional)
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          {/* Deadline - Only for one-time commitments */}
+          {!commitmentUtils.isRecurring(commitment) && (
+            <div>
+              <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
+                Deadline (Optional)
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="date"
+                  id="deadline"
+                  value={formData.deadline}
+                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  disabled={isLoading}
+                  className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-50 ${
+                    errors.deadline ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                />
+              </div>
+              {errors.deadline && (
+                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {errors.deadline}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Due Time - Only for recurring commitments */}
+          {commitmentUtils.isRecurring(commitment) && (
+            <div>
+              <label htmlFor="due_time" className="block text-sm font-medium text-gray-700 mb-1">
+                <Clock className="inline h-4 w-4 mr-1" />
+                Due Time (Optional)
+              </label>
               <input
-                type="date"
-                id="deadline"
-                value={formData.deadline}
-                onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                type="time"
+                id="due_time"
+                value={formData.due_time || ''}
+                onChange={(e) => setFormData({ ...formData, due_time: e.target.value })}
                 disabled={isLoading}
-                className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-50 ${
-                  errors.deadline ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-50"
               />
             </div>
-            {errors.deadline && (
-              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle className="h-4 w-4" />
-                {errors.deadline}
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Status */}
           <div>

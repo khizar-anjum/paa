@@ -52,13 +52,19 @@ class ReminderStrategy(BaseModel):
     custom_message: Optional[str] = None
 
 
-# Extracted Commitment Schema
+# Extracted Commitment Schema (Enhanced for unified system)
 class ExtractedCommitment(BaseModel):
-    """When user makes a commitment"""
+    """When user makes a commitment (one-time or recurring)"""
     task_description: str
     deadline: Optional[datetime] = None
     deadline_type: Literal['specific', 'fuzzy', 'recurring'] = 'fuzzy'
     priority: Literal['high', 'medium', 'low'] = 'medium'
+    
+    # Recurrence fields for unified system
+    recurrence_pattern: Literal['none', 'daily', 'weekly', 'monthly', 'custom'] = 'none'
+    recurrence_days: Optional[List[str]] = None  # ['mon', 'wed', 'fri']
+    due_time: Optional[str] = None  # "07:00" for recurring tasks
+    
     reminder_strategy: ReminderStrategy
     related_people: List[str] = Field(default_factory=list)
     related_habits: List[str] = Field(default_factory=list)
