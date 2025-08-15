@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PAA</string>
+    <string name="title_activity_main">PAA</string>
+    <string name="package_name">com.paa.app</string>
+    <string name="custom_url_scheme">com.paa.app</string>
+</resources>

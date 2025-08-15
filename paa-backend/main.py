@@ -73,10 +73,11 @@ async def debug_middleware(request: Request, call_next):
     
     return response
 
-# CORS configuration
+# CORS configuration - Allow all origins for development
+# In production, you should restrict this to specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js default port
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,6 +112,11 @@ async def startup_event():
 @app.get("/")
 def read_root():
     return {"message": "Personal AI Assistant API"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for monitoring and scripts"""
+    return {"status": "healthy", "service": "PAA Backend", "timestamp": datetime.utcnow()}
 
 # Authentication endpoints
 @app.post("/register", response_model=schemas.User)

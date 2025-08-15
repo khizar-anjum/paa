@@ -1,4 +1,9 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { getApiUrl } from '@/lib/utils/platform';
+
+const getApiUrlForDebug = () => {
+  const mobileUrl = getApiUrl();
+  return mobileUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 export interface TimeStatus {
   using_fake_time: boolean;
@@ -36,13 +41,13 @@ export interface TimeControlResponse {
 }
 
 class DebugApi {
-  private getAuthHeaders() {
+  private getAuthHeaders(): Record<string, string> {
     const token = localStorage.getItem('token');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   }
 
   async getTimeStatus(): Promise<TimeStatusResponse> {
-    const response = await fetch(`${API_URL}/debug/time/status`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/time/status`, {
       headers: this.getAuthHeaders(),
     });
     return response.json();
@@ -54,7 +59,7 @@ class DebugApi {
       body.fake_start_time = fakeStartTime;
     }
 
-    const response = await fetch(`${API_URL}/debug/time/start`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/time/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -66,7 +71,7 @@ class DebugApi {
   }
 
   async stopFakeTime(): Promise<TimeControlResponse> {
-    const response = await fetch(`${API_URL}/debug/time/stop`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/time/stop`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +82,7 @@ class DebugApi {
   }
 
   async setTimeMultiplier(multiplier: number): Promise<TimeControlResponse> {
-    const response = await fetch(`${API_URL}/debug/time/set-multiplier`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/time/set-multiplier`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -89,7 +94,7 @@ class DebugApi {
   }
 
   async jumpToTime(targetTime: string): Promise<TimeControlResponse> {
-    const response = await fetch(`${API_URL}/debug/time/jump`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/time/jump`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -102,28 +107,28 @@ class DebugApi {
 
   // New debug endpoints
   async getDebugStatus(): Promise<any> {
-    const response = await fetch(`${API_URL}/debug/status`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/status`, {
       headers: this.getAuthHeaders(),
     });
     return response.json();
   }
 
   async getRecentPipelineExecutions(): Promise<any> {
-    const response = await fetch(`${API_URL}/debug/pipeline/recent-executions`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/pipeline/recent-executions`, {
       headers: this.getAuthHeaders(),
     });
     return response.json();
   }
 
   async getVectorStoreStats(): Promise<any> {
-    const response = await fetch(`${API_URL}/debug/vector-store/stats`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/vector-store/stats`, {
       headers: this.getAuthHeaders(),
     });
     return response.json();
   }
 
   async clearDebugLogs(): Promise<any> {
-    const response = await fetch(`${API_URL}/debug/clear-logs`, {
+    const response = await fetch(`${getApiUrlForDebug()}/debug/clear-logs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

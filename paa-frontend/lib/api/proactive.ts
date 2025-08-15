@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { debugLogger } from '../debug-utils';
+import { getApiUrl } from '@/lib/utils/platform';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const getApiUrlForProactive = () => {
+  const mobileUrl = getApiUrl();
+  return mobileUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 export interface ProactiveMessage {
   id: number;
@@ -51,7 +55,7 @@ const getAuthToken = () => {
 
 // Create axios instance with auth headers
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: getApiUrlForProactive(),
 });
 
 api.interceptors.request.use((config) => {

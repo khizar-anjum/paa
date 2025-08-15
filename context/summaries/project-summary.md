@@ -1,7 +1,7 @@
-# Personal Accountability Assistant (PAA) - Project Summary
+# Ally - Proactive AI Assistant (PAA) - Project Summary
 
 ## Overview
-A comprehensive personal accountability system with a **chat-first interface** design and **modern responsive navigation**, built with FastAPI backend and Next.js frontend. Features a unified commitments system handling both one-time and recurring tasks through natural conversation.
+Meet Ally - a comprehensive proactive AI assistant with a **chat-first interface** design and **modern responsive navigation**, built with FastAPI backend and Next.js frontend. Ally features a unified commitments system handling both one-time and recurring tasks through natural conversation.
 
 ## Current Architecture
 
@@ -28,8 +28,8 @@ A comprehensive personal accountability system with a **chat-first interface** d
 - **Completion Tracking**: Individual completion records with skip functionality
 - **Time Management**: Optional due times for recurring commitments, deadlines for one-time
 
-### Chat Interface (Primary)
-- **Natural Language Processing**: Create and manage commitments through conversation
+### Chat Interface with Ally (Primary)
+- **Natural Language Processing**: Create and manage commitments through conversation with Ally
 - **Multiple Sessions**: Support for multiple concurrent chat conversations
 - **Persistent History**: Chat conversations stored and retrievable
 - **Always Visible**: Chat remains the central focus of the application

@@ -10,7 +10,7 @@ import { CreatePersonModal } from '@/app/components/CreatePersonModal';
 import { useDataRefresh } from '@/hooks/useDataRefresh';
 import { DATA_EVENTS } from '@/lib/events/dataUpdateEvents';
 import { PageOverlay } from '@/app/components/PageOverlay';
-import { useSidebar } from '../layout';
+import { useSidebar } from '@/app/contexts/sidebar-context';
 
 export default function PeoplePage() {
   const { openSidebar } = useSidebar();

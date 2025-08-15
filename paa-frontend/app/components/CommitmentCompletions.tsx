@@ -158,7 +158,7 @@ export default function CommitmentCompletions({
                       </div>
                       {completion.notes && (
                         <div className="text-xs text-gray-600 mt-1 max-w-32 truncate">
-                          "{completion.notes}"
+                          &quot;{completion.notes}&quot;
                         </div>
                       )}
                     </div>

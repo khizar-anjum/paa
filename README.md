@@ -1,25 +1,25 @@
-# Proactive AI Assistant (PAA) 🤖
+# Ally - Your Proactive AI Assistant 🤖
 
-A revolutionary proactive AI companion that actively helps you build better habits, track your mood, and achieve your goals. Unlike traditional apps that wait for you to engage, PAA actively reaches out with personalized reminders and insights.
+Meet Ally, a revolutionary proactive AI assistant that actively helps you build better habits, track your mood, and achieve your goals. Unlike traditional apps that wait for you to engage, Ally actively reaches out with personalized reminders and insights.
 
 ![Proactive AI Assistant](https://img.shields.io/badge/Status-MVP%20Ready-brightgreen) ![Tech Stack](https://img.shields.io/badge/Stack-FastAPI%20%2B%20Next.js-blue) ![License](https://img.shields.io/badge/License-MIT-orange)
 
-## 🌟 What Makes PAA Different
+## 🌟 What Makes Ally Different
 
-**Proactive, Not Reactive**: Your AI companion doesn't wait for you to open the app. It intelligently reaches out based on your patterns and needs.
+**Proactive, Not Reactive**: Ally doesn't wait for you to open the app. She intelligently reaches out based on your patterns and needs.
 
-**Always Present**: Your AI assistant is always visible alongside your activities - a true digital companion.
+**Always Present**: Ally is always visible alongside your activities - a true digital companion.
 
-**Context-Aware**: PAA remembers your habits, understands your mood patterns, and provides personalized guidance based on your unique situation.
+**Context-Aware**: Ally remembers your habits, understands your mood patterns, and provides personalized guidance based on your unique situation.
 
 ## ✨ Key Features
 
 - **🎯 Smart Habit Tracking**: Create habits with intelligent reminders and streak tracking
-- **💬 Persistent AI Chat**: Always-visible companion that knows your context
+- **💬 Chat with Ally**: Always-visible AI assistant that knows your context
 - **😊 Daily Mood Check-ins**: Track emotional wellness with smart once-daily prompts
 - **📊 Real-time Analytics**: Visualize your progress with beautiful charts
 - **👥 People Management**: Keep track of important relationships
-- **👤 Personal Profile**: Maintain your personal context for better AI interactions
+- **👤 Personal Profile**: Maintain your personal context so Ally can better assist you
 
 ## 🚀 Quick Start
 
@@ -91,9 +91,9 @@ A revolutionary proactive AI companion that actively helps you build better habi
 ## 🎯 Getting Started
 
 1. **Create an Account**: Visit http://localhost:3000/register to sign up
-2. **Complete Your Profile**: Add personal context to help your AI assistant understand you better
+2. **Complete Your Profile**: Add personal context to help Ally understand you better
 3. **Add Your First Habit**: Start with one simple daily habit
-4. **Chat with Your AI**: Your assistant is always there in the right panel
+4. **Chat with Ally**: She's always there in the right panel, ready to help
 5. **Track Your Mood**: Complete daily check-ins to monitor emotional wellness
 6. **View Analytics**: See your progress visualized in real-time
 
@@ -110,8 +110,8 @@ A revolutionary proactive AI companion that actively helps you build better habi
 ### Habit Management
 Create habits with customizable frequencies and reminder times. Track your streaks and see completion rates at a glance.
 
-### AI Chat Assistant
-Your persistent companion that:
+### Chat with Ally
+Ally is your persistent AI assistant who:
 - Knows your habits and current progress
 - Understands your mood patterns
 - Provides personalized encouragement and advice
@@ -167,4 +167,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Remember**: PAA is more than an app - it's your proactive AI companion for personal growth! 🌱
+**Remember**: Ally is more than an app - she's your proactive AI assistant for personal growth! 🌱

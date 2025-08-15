@@ -3,6 +3,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import { getApiEndpoint, isMobileApp } from '@/lib/utils/platform';
 
 interface User {
   id: number;
@@ -47,9 +48,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      const response = await axios.get('/users/me');
+      console.log('Fetching user with endpoint:', getApiEndpoint('/users/me'));
+      const response = await axios.get(getApiEndpoint('/users/me'));
+      console.log('User fetch successful:', response.data);
       setUser(response.data);
     } catch (error) {
+      console.error('User fetch failed:', error);
       localStorage.removeItem('token');
       setToken(null);
       delete axios.defaults.headers.common['Authorization'];
@@ -61,12 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (username: string, password: string) => {
+    console.log('Login attempt with endpoint:', getApiEndpoint('/token'));
     const formData = new FormData();
     formData.append('username', username);
     formData.append('password', password);
 
-    const response = await axios.post('/token', formData);
+    const response = await axios.post(getApiEndpoint('/token'), formData);
     const { access_token } = response.data;
+    console.log('Login successful, token received');
     
     localStorage.setItem('token', access_token);
     setToken(access_token);
@@ -74,12 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set cookie for middleware
     document.cookie = `token=${access_token}; path=/; max-age=${7 * 24 * 60 * 60}`; // 7 days
     
+    console.log('About to fetch user...');
     await fetchUser();
+    console.log('User fetched, navigating to dashboard...');
     router.push('/dashboard');
   };
 
   const register = async (username: string, email: string, password: string) => {
-    await axios.post('/register', { username, email, password });
+    await axios.post(getApiEndpoint('/register'), { username, email, password });
     await login(username, password);
   };
 

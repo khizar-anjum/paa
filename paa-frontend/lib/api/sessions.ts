@@ -1,10 +1,14 @@
 import axios from 'axios';
+import { getApiUrl } from '@/lib/utils/platform';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const getApiBaseUrl = () => {
+  const mobileUrl = getApiUrl();
+  return mobileUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getApiBaseUrl(),
 });
 
 // Add auth token to requests

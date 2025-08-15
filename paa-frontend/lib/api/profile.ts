@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { debugLogger } from '../debug-utils';
+import { getApiUrl } from '@/lib/utils/platform';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const getApiUrlForProfile = () => {
+  const mobileUrl = getApiUrl();
+  return mobileUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 // Types
 export interface UserProfile {
@@ -32,7 +36,7 @@ export interface UserProfileUpdate {
 export const profileApi = {
   async get(): Promise<UserProfile> {
     const startTime = Date.now();
-    const url = `${API_URL}/profile`;
+    const url = `${getApiUrlForProfile()}/profile`;
     
     const callId = debugLogger.logApiCall('GET', url);
     
@@ -54,7 +58,7 @@ export const profileApi = {
 
   async create(profile: UserProfileCreate): Promise<UserProfile> {
     const startTime = Date.now();
-    const url = `${API_URL}/profile`;
+    const url = `${getApiUrlForProfile()}/profile`;
     const requestData = { ...profile };
     
     const callId = debugLogger.logApiCall('POST', url, requestData);
@@ -77,7 +81,7 @@ export const profileApi = {
 
   async update(profile: UserProfileUpdate): Promise<UserProfile> {
     const startTime = Date.now();
-    const url = `${API_URL}/profile`;
+    const url = `${getApiUrlForProfile()}/profile`;
     const requestData = { ...profile };
     
     const callId = debugLogger.logApiCall('PUT', url, requestData);

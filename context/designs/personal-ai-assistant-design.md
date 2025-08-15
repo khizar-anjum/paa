@@ -1,7 +1,7 @@
-# Personal AI Assistant - Design Summary
+# Ally - Proactive AI Assistant Design Summary
 
 ## Overview
-A proactive, persistent personal AI assistant designed for busy individuals who need intelligent reminders and life management support. The system leverages Claude Code as its core intelligence engine and integrates with various aspects of the user's life to provide contextual, timely assistance.
+Ally is a proactive, persistent AI assistant designed for busy individuals who need intelligent reminders and life management support. Ally leverages Claude Code as her core intelligence engine and integrates with various aspects of the user's life to provide contextual, timely assistance.
 
 ## Core Principles
 - **Proactive Engagement**: The assistant doesn't wait for user prompts but actively reaches out based on patterns and scheduled events

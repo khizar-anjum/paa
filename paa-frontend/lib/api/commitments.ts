@@ -1,6 +1,10 @@
 import axios from 'axios';
+import { getApiUrl } from '@/lib/utils/platform';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const getApiBaseUrl = () => {
+  const mobileUrl = getApiUrl();
+  return mobileUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 // Types
 export interface Commitment {
@@ -112,7 +116,7 @@ export const commitmentAPI = {
       if (filters?.order) params.append('order', filters.order);
       
       const queryString = params.toString();
-      const url = `${API_BASE_URL}/commitments${queryString ? `?${queryString}` : ''}`;
+      const url = `${getApiBaseUrl()}/commitments${queryString ? `?${queryString}` : ''}`;
       
       const response = await axios.get(url, getConfig());
       return response.data;
@@ -126,7 +130,7 @@ export const commitmentAPI = {
   async updateCommitment(id: number, updates: CommitmentUpdate): Promise<Commitment> {
     try {
       const response = await axios.put(
-        `${API_BASE_URL}/commitments/${id}`,
+        `${getApiBaseUrl()}/commitments/${id}`,
         updates,
         getConfig()
       );
@@ -141,7 +145,7 @@ export const commitmentAPI = {
   async completeCommitment(id: number, completionData?: CommitmentCompletionCreate): Promise<{ message: string }> {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/commitments/${id}/complete`,
+        `${getApiBaseUrl()}/commitments/${id}/complete`,
         completionData || {},
         getConfig()
       );
@@ -156,7 +160,7 @@ export const commitmentAPI = {
   async skipCommitment(id: number, notes?: string): Promise<{ message: string }> {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/commitments/${id}/skip`,
+        `${getApiBaseUrl()}/commitments/${id}/skip`,
         { notes },
         getConfig()
       );
@@ -171,7 +175,7 @@ export const commitmentAPI = {
   async getCommitmentCompletions(id: number): Promise<CommitmentCompletion[]> {
     try {
       const response = await axios.get(
-        `${API_BASE_URL}/commitments/${id}/completions`,
+        `${getApiBaseUrl()}/commitments/${id}/completions`,
         getConfig()
       );
       return response.data;
@@ -185,7 +189,7 @@ export const commitmentAPI = {
   async dismissCommitment(id: number): Promise<{ message: string }> {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/commitments/${id}/dismiss`,
+        `${getApiBaseUrl()}/commitments/${id}/dismiss`,
         {},
         getConfig()
       );
@@ -200,7 +204,7 @@ export const commitmentAPI = {
   async postponeCommitment(id: number, newDeadline: string): Promise<{ message: string }> {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/commitments/${id}/postpone`,
+        `${getApiBaseUrl()}/commitments/${id}/postpone`,
         { deadline: newDeadline },
         getConfig()
       );
@@ -215,7 +219,7 @@ export const commitmentAPI = {
   async deleteCommitment(id: number): Promise<{ message: string }> {
     try {
       const response = await axios.delete(
-        `${API_BASE_URL}/commitments/${id}`,
+        `${getApiBaseUrl()}/commitments/${id}`,
         getConfig()
       );
       return response.data;
@@ -229,7 +233,7 @@ export const commitmentAPI = {
   async getCommitmentReminders(id: number): Promise<ProactiveMessage[]> {
     try {
       const response = await axios.get(
-        `${API_BASE_URL}/commitments/${id}/reminders`,
+        `${getApiBaseUrl()}/commitments/${id}/reminders`,
         getConfig()
       );
       return response.data;

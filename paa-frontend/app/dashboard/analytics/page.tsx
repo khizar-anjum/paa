@@ -6,7 +6,7 @@ import { analyticsApi, CommitmentAnalytics, MoodAnalytics, OverviewAnalytics } f
 import { AnalyticsChart } from '@/app/components/AnalyticsChart';
 import { toast } from 'sonner';
 import { PageOverlay } from '@/app/components/PageOverlay';
-import { useSidebar } from '../layout';
+import { useSidebar } from '@/app/contexts/sidebar-context';
 
 export default function AnalyticsPage() {
   const { openSidebar } = useSidebar();

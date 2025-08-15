@@ -203,7 +203,6 @@ export function PersistentChatPanel({ onOpenSidebar }: PersistentChatPanelProps)
       // Since we don't know what was updated, emit all relevant events
       dataUpdateEvents.emitMultiple([
         DATA_EVENTS.COMMITMENT_UPDATED,
-        DATA_EVENTS.HABIT_UPDATED,
         DATA_EVENTS.PROFILE_UPDATED,
         DATA_EVENTS.CHECKIN_UPDATED
       ]);

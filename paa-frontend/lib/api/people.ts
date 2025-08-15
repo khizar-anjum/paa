@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { debugLogger } from '../debug-utils';
+import { getApiUrl } from '@/lib/utils/platform';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const getApiUrlForPeople = () => {
+  const mobileUrl = getApiUrl();
+  return mobileUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 // Types
 export interface Person {
@@ -32,7 +36,7 @@ export interface PersonUpdate {
 export const peopleApi = {
   async getAll(): Promise<Person[]> {
     const startTime = Date.now();
-    const url = `${API_URL}/people`;
+    const url = `${getApiUrlForPeople()}/people`;
     
     const callId = debugLogger.logApiCall('GET', url);
     
@@ -54,7 +58,7 @@ export const peopleApi = {
 
   async getById(id: number): Promise<Person> {
     const startTime = Date.now();
-    const url = `${API_URL}/people/${id}`;
+    const url = `${getApiUrlForPeople()}/people/${id}`;
     const requestData = { id };
     
     const callId = debugLogger.logApiCall('GET', url, requestData);
@@ -77,7 +81,7 @@ export const peopleApi = {
 
   async create(person: PersonCreate): Promise<Person> {
     const startTime = Date.now();
-    const url = `${API_URL}/people`;
+    const url = `${getApiUrlForPeople()}/people`;
     const requestData = { ...person };
     
     const callId = debugLogger.logApiCall('POST', url, requestData);
@@ -100,7 +104,7 @@ export const peopleApi = {
 
   async update(id: number, person: PersonUpdate): Promise<Person> {
     const startTime = Date.now();
-    const url = `${API_URL}/people/${id}`;
+    const url = `${getApiUrlForPeople()}/people/${id}`;
     const requestData = { id, ...person };
     
     const callId = debugLogger.logApiCall('PUT', url, requestData);
@@ -123,7 +127,7 @@ export const peopleApi = {
 
   async delete(id: number): Promise<void> {
     const startTime = Date.now();
-    const url = `${API_URL}/people/${id}`;
+    const url = `${getApiUrlForPeople()}/people/${id}`;
     const requestData = { id };
     
     const callId = debugLogger.logApiCall('DELETE', url, requestData);

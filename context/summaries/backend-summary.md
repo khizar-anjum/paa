@@ -1,4 +1,4 @@
-# PAA Backend Summary
+# Ally Backend Summary
 
 ## Architecture
 - **Framework**: FastAPI with async support

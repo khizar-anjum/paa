@@ -1,4 +1,4 @@
-# PAA Frontend Summary - Chat-First Interface with Modern Navigation
+# Ally Frontend Summary - Chat-First Interface with Modern Navigation
 
 ## Architecture
 - **Framework**: Next.js 14 with App Router
@@ -155,9 +155,9 @@ The main chat interface with responsive hamburger menu:
 ```
 
 **Features:**
-- **Multiple Conversations**: Support for multiple chat sessions
-- **Message History**: Persistent conversation storage
-- **AI Integration**: Natural language commitment creation
+- **Multiple Conversations**: Support for multiple chat sessions with Ally
+- **Message History**: Persistent conversation storage with Ally
+- **AI Integration**: Natural language commitment creation through Ally
 - **Responsive Design**: Hamburger menu only on small screens
 - **Centered Layout**: `max-w-4xl mx-auto` for all sections
 

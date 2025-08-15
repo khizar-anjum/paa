@@ -3,23 +3,11 @@
 import { useAuth } from '@/lib/auth-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { LogOut, Loader2 } from 'lucide-react';
-import { useEffect, useState, useCallback, createContext, useContext } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { PersistentChatPanel } from '@/app/components/PersistentChatPanel';
 import { CollapsibleSidebar } from '@/app/components/CollapsibleSidebar';
 import { ExpandableSidebar } from '@/app/components/ExpandableSidebar';
-
-// Create context for sidebar functionality
-const SidebarContext = createContext<{
-  openSidebar: () => void;
-} | null>(null);
-
-export const useSidebar = () => {
-  const context = useContext(SidebarContext);
-  if (!context) {
-    throw new Error('useSidebar must be used within a SidebarProvider');
-  }
-  return context;
-};
+import { SidebarProvider } from '@/app/contexts/sidebar-context';
 
 export default function DashboardLayout({
   children,
@@ -30,6 +18,14 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Debug auth state
+  console.log('Dashboard layout render - Auth state:', { 
+    user: user ? `${user.username} (${user.email})` : null, 
+    isLoading, 
+    pathname,
+    hasToken: !!localStorage.getItem('token')
+  });
 
   // Memoize the close function to prevent useEffect re-runs
   const closeSidebar = useCallback(() => {
@@ -69,6 +65,7 @@ export default function DashboardLayout({
   }, [pathname]);
 
   if (isLoading) {
+    console.log('Dashboard layout: Still loading, showing spinner');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
@@ -77,8 +74,12 @@ export default function DashboardLayout({
   }
 
   if (!user) {
+    console.log('Dashboard layout: No user found, returning null');
     return null;
   }
+
+  console.log('Dashboard layout: User found, rendering dashboard. User:', user);
+  console.log('Dashboard layout: isShowingChat:', isShowingChat, 'pathname:', pathname);
 
   // Check if we should show chat interface (dashboard root or non-overlay pages)
   const isShowingChat = pathname === '/dashboard';
@@ -86,7 +87,7 @@ export default function DashboardLayout({
   
 
   return (
-    <SidebarContext.Provider value={{ openSidebar }}>
+    <SidebarProvider value={{ openSidebar }}>
       <div className="min-h-screen bg-white">
         {/* Expandable Sidebar - Always visible on large screens */}
         <ExpandableSidebar 
@@ -126,6 +127,6 @@ export default function DashboardLayout({
           )}
         </div>
       </div>
-    </SidebarContext.Provider>
+    </SidebarProvider>
   );
 }
